@@ -46,10 +46,12 @@ Camera duoc dat co dinh khoang 45 do ve phia ben trai nguoi dung, khong phai goc
 
 ## 4. 4 posture class du kien
 
-- `NORMAL`: ngoi thang.
-- `HUNCH_DOWN`: ngoi gu / cui.
-- `TILT_LEFT`: nghieng trai.
-- `TILT_RIGHT`: nghieng phai.
+| Class | Y nghia |
+| --- | --- |
+| `correct` | Nguoi dung dang ngoi dung tu the |
+| `forward_slouch` | Nguoi dung cui dau / gu nguoi ve phia truoc |
+| `lean_left` | Nguoi dung nghieng nguoi sang trai |
+| `lean_right` | Nguoi dung nghieng nguoi sang phai |
 
 ## 5. 6 keypoint dang su dung
 
@@ -215,7 +217,7 @@ python -m tests.test_feature_extractor
 
 Cong viec tiep theo nen lam:
 
-- Hoan thien dataset 4 lop: `NORMAL`, `HUNCH_DOWN`, `TILT_LEFT`, `TILT_RIGHT`.
+- Hoan thien dataset 4 lop: `correct`, `forward_slouch`, `lean_left`, `lean_right`.
 - Chuyen toan bo dataset qua `FeatureExtractor`.
 - Tao bang feature + label.
 - Thuc hien EDA.
@@ -231,4 +233,3 @@ Cong viec tiep theo nen lam:
 - Luu model/scaler bang Joblib.
 
 Can dac biet luu y: khong nen random split cac frame gan nhau tu cung mot video/session vao ca train va test. Cach split nay co the gay data leakage va tao accuracy ao. Nen split theo person hoac session de ket qua danh gia gan voi thuc te hon.
-
