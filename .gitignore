@@ -8,3 +8,8 @@ __pycache__/
 models/*.pt
 models/.cache/
 
+# Dataset and generated outputs
+data/raw/**
+data/processed/*.csv
+data/rejected/*.csv
+data/rejected/rejected_img/**
