@@ -6,10 +6,10 @@ Smart Posture Monitor la project Python nhan dien tu the ngoi bang webcam. Pipel
 
 He thong du kien nhan dien 4 posture:
 
-- `NORMAL`: ngoi thang
-- `HUNCH_DOWN`: ngoi gu / cui
-- `TILT_LEFT`: nghieng trai
-- `TILT_RIGHT`: nghieng phai
+- `correct`: ngoi dung tu the
+- `forward_slouch`: cui / gu nguoi ve phia truoc
+- `lean_left`: nghieng nguoi sang trai
+- `lean_right`: nghieng nguoi sang phai
 
 Pipeline tong quat:
 
@@ -75,4 +75,3 @@ Hai test tren dung webcam va hien thi cua so OpenCV. Bam `q` de thoat.
 Bao cao chi tiet cho thanh vien Machine Learning nam tai:
 
 [docs/progress_pose_feature.md](docs/progress_pose_feature.md)
-
