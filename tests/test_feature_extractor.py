@@ -76,7 +76,7 @@ while True:
 
             cv2.putText(
                 frame,
-                "Features OK: 18",
+                "Features OK: 29",
 
                 (20, 40),
 
@@ -109,15 +109,15 @@ while True:
 
                 "shoulder_angle",
 
-                "eye_shoulder_angle",
+                "head_body_angle",
 
-                "nose_y_body",
+                "head_gravity_angle",
 
-                "eye_center_y_body",
+                "face_pitch_angle",
 
-                "nose_eye_dy",
+                "head_mean_height",
 
-                "nose_shoulder_asymmetry"
+                "head_axis_angle_spread"
             ]
 
 
@@ -153,7 +153,7 @@ while True:
 
 
             # ================================================
-            # In toàn bộ features mỗi 30 frame
+            # In toàn bộ 29 features mỗi 30 frame
             # ================================================
 
             if frame_count % 30 == 0:
@@ -165,7 +165,7 @@ while True:
                 )
 
                 print(
-                    "FEATURE VECTOR"
+                    "FEATURE VECTOR - 29 FEATURES"
                 )
 
                 print(
