@@ -6,7 +6,8 @@ from ultralytics import YOLO
 
 class PoseDetector:
     """
-    Phát hiện pose của người có detection confidence cao nhất
+    Phát hiện pose của người phù hợp nhất với chủ thể chính,
+    ưu tiên người gần tâm ảnh và có detection confidence cao.
     và chỉ trả về 6 keypoint cần dùng cho bài toán posture.
 
     6 keypoints:
@@ -194,11 +195,75 @@ class PoseDetector:
             return None
 
         # =====================================================
-        # 5. Chọn person có confidence CAO NHẤT
+        # 5. Chọn person phù hợp nhất:
+        #    ưu tiên người gần tâm ảnh + confidence cao
         # =====================================================
 
+        all_bboxes = (
+            result.boxes.xyxy
+            .detach()
+            .cpu()
+            .numpy()
+        )
+
+        frame_height, frame_width = frame.shape[:2]
+
+        # Tâm của ảnh
+        image_center_x = frame_width / 2.0
+        image_center_y = frame_height / 2.0
+
+        # Khoảng cách lớn nhất có thể từ tâm ảnh tới góc ảnh
+        max_center_distance = np.sqrt(
+            image_center_x ** 2
+            + image_center_y ** 2
+        )
+
+        person_scores = []
+
+        for i, bbox_candidate in enumerate(all_bboxes):
+
+            x1, y1, x2, y2 = bbox_candidate
+
+            # Tâm bounding box của person
+            person_center_x = (x1 + x2) / 2.0
+            person_center_y = (y1 + y2) / 2.0
+
+            # Khoảng cách từ tâm person tới tâm ảnh
+            center_distance = np.sqrt(
+                (person_center_x - image_center_x) ** 2
+                + (person_center_y - image_center_y) ** 2
+            )
+
+            # Chuẩn hóa về khoảng 0 -> 1
+            normalized_distance = (
+                center_distance / max_center_distance
+                if max_center_distance > 0
+                else 0.0
+            )
+
+            # Centrality:
+            # gần tâm ảnh -> gần 1
+            # xa tâm ảnh  -> gần 0
+            centrality_score = max(
+                0.0,
+                1.0 - normalized_distance
+            )
+
+            confidence_score = float(
+                person_confidences[i]
+            )
+
+            # Ưu tiên vị trí trung tâm hơn confidence
+            final_score = (
+                0.7 * centrality_score
+                + 0.3 * confidence_score
+            )
+
+            person_scores.append(final_score)
+
+
         best_person_index = int(
-            np.argmax(person_confidences)
+            np.argmax(person_scores)
         )
 
         best_person_confidence = float(
