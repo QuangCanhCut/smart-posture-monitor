@@ -8,3 +8,9 @@ __pycache__/
 models/*.pt
 models/.cache/
 
+# Data folders (ignore heavy images, keep .gitkeep and processed features)
+data/raw/*
+!data/raw/.gitkeep
+data/anhdung/
+data/anhloi/
+
