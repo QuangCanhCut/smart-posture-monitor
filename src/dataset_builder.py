@@ -9,6 +9,7 @@ import numpy as np
 from src.feature_extractor import FeatureExtractor
 from src.pose_detector import PoseDetector
 
+
 """
 data/raw/
    ↓
@@ -28,17 +29,18 @@ data/raw/
    ↓
 8. FeatureExtractor.extract()
    ↓
-9. Có đủ 18 features không
+9. Có đủ 29 features không
    ↓
 10A. HỢP LỆ                 10B. KHÔNG HỢP LỆ
      ↓                           ↓
  features.csv              rejected_images.csv
 """
 
+
 class DatasetBuilder:
     """
     Quét thư mục ảnh raw, chạy PoseDetector và FeatureExtractor
-    để trích xuất vector 18 đặc trưng và xuất ra file CSV phục vụ huấn luyện ML.
+    để trích xuất vector 29 đặc trưng và xuất ra file CSV phục vụ huấn luyện ML.
 
     Cấu trúc dữ liệu BẮT BUỘC:
         data/raw/<label>/<person_id>_<session_id>/<file>
@@ -55,6 +57,8 @@ class DatasetBuilder:
     Các ảnh bị loại sẽ được ghi log vào:
         data/rejected/rejected_images.csv
     """
+
+    EXPECTED_FEATURE_COUNT = 29
 
     VALID_LABELS = {
         "correct",
@@ -103,13 +107,23 @@ class DatasetBuilder:
         self.detector = detector if detector is not None else PoseDetector()
         self.extractor = extractor if extractor is not None else FeatureExtractor()
 
-        # Headers của CSV dataset: Metadata + Label + 18 Features.
+        # DatasetBuilder V2 yêu cầu đúng FeatureExtractor 29 features.
+        self.feature_names = list(self.extractor.FEATURE_NAMES)
+
+        if len(self.feature_names) != self.EXPECTED_FEATURE_COUNT:
+            raise ValueError(
+                "DatasetBuilder yêu cầu FeatureExtractor trả về "
+                f"{self.EXPECTED_FEATURE_COUNT} features, nhưng FEATURE_NAMES "
+                f"hiện có {len(self.feature_names)}."
+            )
+
+        # Headers của CSV dataset: Metadata + Label + 29 Features.
         self.headers = [
             "image_path",
             "session_id",
             "person_id",
             "label",
-        ] + list(FeatureExtractor.FEATURE_NAMES)
+        ] + self.feature_names
 
         # Headers của CSV ghi lại các ảnh bị loại.
         self.rejected_headers = [
@@ -256,7 +270,8 @@ class DatasetBuilder:
         required_keypoints = list(PoseDetector.KEYPOINT_INDICES.keys())
 
         missing_keypoints = [
-            name for name in required_keypoints
+            name
+            for name in required_keypoints
             if name not in keypoints
         ]
 
@@ -331,7 +346,7 @@ class DatasetBuilder:
 
     def build(self) -> Dict[str, Any]:
         """
-        Quét toàn bộ thư mục raw, trích xuất đặc trưng và ghi ra CSV.
+        Quét toàn bộ thư mục raw, trích xuất 29 đặc trưng và ghi ra CSV.
 
         Đồng thời ghi toàn bộ ảnh bị loại cùng lý do vào
         data/rejected/rejected_images.csv.
@@ -391,6 +406,7 @@ class DatasetBuilder:
                 label: 0
                 for label in sorted(self.VALID_LABELS)
             },
+
             "per_person_count": {},
         }
 
@@ -398,6 +414,7 @@ class DatasetBuilder:
         print(f"Thư mục ảnh gốc: {self.raw_data_dir}")
         print(f"File CSV đầu ra: {self.output_csv_path}")
         print(f"File ảnh bị loại: {self.rejected_csv_path}")
+        print(f"Số features mỗi mẫu: {len(self.feature_names)}")
         print(f"Tổng số file ảnh phát hiện: {len(all_image_paths)}\n")
 
         with (
@@ -535,7 +552,7 @@ class DatasetBuilder:
                         continue
 
                     # =====================================================
-                    # 5. Trích xuất 18 features
+                    # 5. Trích xuất 29 features
                     # =====================================================
                     features = self.extractor.extract(pose)
 
@@ -574,9 +591,7 @@ class DatasetBuilder:
                         dtype=np.float64,
                     ).reshape(-1)
 
-                    if len(features_array) != len(
-                        FeatureExtractor.FEATURE_NAMES
-                    ):
+                    if len(features_array) != self.EXPECTED_FEATURE_COUNT:
                         stats[
                             "skipped_invalid_feature_length"
                         ] += 1
@@ -591,8 +606,7 @@ class DatasetBuilder:
                             "invalid_feature_length",
                             (
                                 f"Nhận được {len(features_array)} features, "
-                                f"nhưng yêu cầu "
-                                f"{len(FeatureExtractor.FEATURE_NAMES)}."
+                                f"nhưng yêu cầu {self.EXPECTED_FEATURE_COUNT}."
                             ),
                             person_confidence,
                             keypoint_confidences,
@@ -640,6 +654,7 @@ class DatasetBuilder:
                         person_id,
                         0,
                     )
+
                     stats["per_person_count"][person_id] += 1
 
                 except Exception as exc:
