@@ -6,3 +6,4 @@ scikit-learn
 matplotlib
 xgboost
 ipykernel
+pytest
