@@ -40,7 +40,7 @@ File này KHÔNG thực hiện:
 - Xóa feature chỉ vì correlation cao.
 - SMOTE / oversampling.
 - Random train/validation/test split theo frame.
-- Train model SVM/XGBoost.
+- Train model SVM/XGBoost/MLP.
 
 Lý do:
 Những bước trên nếu thực hiện sai vị trí có thể gây data leakage.
@@ -56,6 +56,120 @@ Vai trò của preprocessing.py là:
     5. Chuẩn bị X, y, groups và metadata.
     6. Trả dữ liệu sạch cho train.py.
 """
+
+# ============================================================
+# HƯỚNG DẪN CẬP NHẬT KHI DATASET THAY ĐỔI
+# ============================================================
+#
+# File preprocessing.py được thiết kế để KHÔNG phải sửa mỗi khi
+# dataset tăng thêm số lượng ảnh, person hoặc session.
+#
+# Các trường hợp KHÔNG cần sửa preprocessing.py:
+# - Thêm ảnh mới vào dataset.
+# - Thêm person mới, ví dụ person11, person12,...
+# - Thêm session mới, ví dụ session02, session03,...
+# - Rebuild lại data/processed/features.csv với cùng schema hiện tại.
+#
+# Sau khi cập nhật dataset, chỉ cần chạy lại:
+#
+#     python -m src.preprocessing
+#
+# và test lại:
+#
+#     python -m pytest tests/test_preprocessing.py -v
+#
+#
+# ============================================================
+# CÁC TRƯỜNG HỢP CẦN LƯU Ý / CÓ THỂ PHẢI CHỈNH CODE
+# ============================================================
+#
+# 1. Nếu FeatureExtractor thay đổi số lượng hoặc tên feature:
+#
+#    Ví dụ:
+#        V2: 29 features
+#        V3: 35 features
+#
+#    preprocessing.py đang lấy trực tiếp:
+#
+#        FeatureExtractor.FEATURE_NAMES
+#
+#    nên thông thường không cần sửa danh sách feature ở đây.
+#
+#    Tuy nhiên PHẢI rebuild lại features.csv bằng FeatureExtractor mới.
+#    Nếu CSV cũ không khớp với FeatureExtractor hiện tại,
+#    preprocessing sẽ báo lỗi schema.
+#
+#
+# 2. Nếu thay đổi hoặc thêm class:
+#
+#    Ví dụ thêm:
+#
+#        "lean_forward"
+#
+#    thì cần cập nhật:
+#
+#        EXPECTED_CLASSES
+#        LABEL_TO_ID
+#        ID_TO_LABEL
+#
+#
+# 3. Nếu thay đổi metadata của dataset:
+#
+#    Ví dụ thêm:
+#
+#        camera_id
+#        camera_angle
+#        distance
+#
+#    thì cần xem xét cập nhật:
+#
+#        METADATA_COLUMNS
+#        phần metadata trong prepare_model_data()
+#
+#
+# 4. Nếu một person trước đây bị loại do sai acquisition protocol
+#    đã được quay lại đúng protocol:
+#
+#    Ví dụ hiện tại:
+#
+#        excluded_persons = ("person05",)
+#
+#    Sau khi person05 được quay lại đúng camera protocol và
+#    features.csv được rebuild:
+#
+#        excluded_persons = ()
+#
+#
+# 5. Không được tự động sửa preprocessing để:
+#
+#    - random split theo frame
+#    - scale toàn bộ dataset trước khi split
+#    - PCA toàn bộ dataset trước khi split
+#    - xóa outlier chỉ vì IQR
+#    - xóa feature chỉ vì correlation cao
+#    - SMOTE trước khi split
+#
+#    Những bước này thuộc train.py / evaluation pipeline và phải
+#    được thực hiện đúng theo group/person để tránh data leakage.
+#
+#
+# ============================================================
+# NGUYÊN TẮC CHUNG
+# ============================================================
+#
+# Nếu dataset chỉ "nhiều hơn" nhưng cấu trúc không đổi:
+#     -> KHÔNG sửa preprocessing.py
+#
+# Nếu dataset "đổi schema":
+#     -> kiểm tra lại constants + validation logic
+#
+# Sau mọi lần thay đổi dataset:
+#
+#     1. Rebuild features.csv
+#     2. Chạy python -m src.preprocessing
+#     3. Chạy pytest
+#     4. Chỉ train model khi tất cả đều PASS
+#
 
 from dataclasses import dataclass
 from pathlib import Path
