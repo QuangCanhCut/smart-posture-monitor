@@ -408,6 +408,7 @@ class DatasetBuilder:
             },
 
             "per_person_count": {},
+            "per_session_count": {},
         }
 
         print("=== BẮT ĐẦU XÂY DỰNG DATASET ===")
@@ -657,6 +658,14 @@ class DatasetBuilder:
 
                     stats["per_person_count"][person_id] += 1
 
+                    session_key = f"{person_id}_{session_id}"
+                    stats["per_session_count"].setdefault(
+                        session_key,
+                        0,
+                    )
+
+                    stats["per_session_count"][session_key] += 1
+
                 except Exception as exc:
                     # Không để một ảnh lỗi làm dừng toàn bộ quá trình build.
                     stats["skipped_processing_error"] += 1
@@ -697,6 +706,8 @@ class DatasetBuilder:
         print(f"File rejected: {self.rejected_csv_path}")
         print(f"Số mẫu hợp lệ: {success}/{total} ({success_rate:.2f}%)")
         print(f"Số mẫu bị loại: {rejected}/{total}")
+        print(f"Số person có mẫu hợp lệ: {len(stats['per_person_count'])}")
+        print(f"Số session có mẫu hợp lệ: {len(stats['per_session_count'])}")
 
         print("\nChi tiết số lượng hợp lệ theo từng nhãn:")
         for label, count in stats["per_label_count"].items():
@@ -707,6 +718,12 @@ class DatasetBuilder:
             stats["per_person_count"].items()
         ):
             print(f"  - {person_id}: {count} mẫu")
+
+        print("\nChi tiết số lượng hợp lệ theo từng session:")
+        for session_key, count in sorted(
+            stats["per_session_count"].items()
+        ):
+            print(f"  - {session_key}: {count} mẫu")
 
         print("\nChi tiết lý do ảnh bị loại:")
         rejection_stat_keys = [
