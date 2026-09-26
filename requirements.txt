@@ -5,5 +5,7 @@ pandas
 scikit-learn
 matplotlib
 xgboost
+joblib
 ipykernel
 pytest
+tabulate
