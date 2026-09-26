@@ -1,5 +1,5 @@
 import cv2
-from temporal_monitor import TemporalMonitor
+from src.temporal_monitor import TemporalMonitor
 from state import state
 
 
