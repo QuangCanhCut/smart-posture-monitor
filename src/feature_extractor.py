@@ -20,7 +20,12 @@ class FeatureExtractor:
         }
 
     Output:
-        numpy.ndarray shape (29,)
+        numpy.ndarray shape (32,)
+
+        Features 1-29: V02 engineered features (giữ nguyên thứ tự)
+        Feature  30:   face_shoulder_scale_ratio  (Depth Proxy D1)
+        Feature  31:   ear_nose_depth_proxy       (Depth Proxy D3)
+        Feature  32:   face_rotation_proxy        (Depth Proxy D4)
 
     Nếu keypoint không đủ chất lượng:
         return None
@@ -67,7 +72,12 @@ class FeatureExtractor:
 
         "nose_body_angle",
         "ear_body_angle",
-        "head_axis_angle_spread"
+        "head_axis_angle_spread",
+
+        # V03 Depth Proxy Features
+        "face_shoulder_scale_ratio",
+        "ear_nose_depth_proxy",
+        "face_rotation_proxy",
     ]
 
     REQUIRED_KEYPOINTS = [
@@ -141,10 +151,10 @@ class FeatureExtractor:
 
     def extract(self, pose_result):
         """
-        Chuyển pose_result thành vector 29 features.
+        Chuyển pose_result thành vector 32 features.
 
         Returns:
-            np.ndarray shape (29,) hoặc None nếu frame không hợp lệ.
+            np.ndarray shape (32,) hoặc None nếu frame không hợp lệ.
         """
 
         # -----------------------------------------------------
@@ -516,11 +526,69 @@ class FeatureExtractor:
         )
 
         # =====================================================
+        # FEATURE 30 (V03 Depth Proxy D1)
+        # Face triangle area / shoulder_width²
+        #
+        # Tam giác (left_eye, right_eye, nose) là proxy cho
+        # "kích thước mặt trong ảnh".
+        #
+        # Forward slouch: mặt gần camera → tam giác LỚN → TĂNG
+        # Lean right:     mặt xa camera  → tam giác NHỎ → GIẢM
+        # =====================================================
+
+        face_triangle_area = 0.5 * abs(
+            (right_eye[0] - left_eye[0])
+            * (nose[1] - left_eye[1])
+            - (nose[0] - left_eye[0])
+            * (right_eye[1] - left_eye[1])
+        )
+
+        face_shoulder_scale_ratio = float(
+            face_triangle_area / (shoulder_width ** 2)
+        )
+
+        # =====================================================
+        # FEATURE 31 (V03 Depth Proxy D3)
+        # ear-nose distance / ear-eye distance
+        #
+        # Forward slouch: mũi vươn ra trước →
+        #   ear-nose tăng, ear-eye giữ nguyên → ratio TĂNG
+        # Lean right: toàn bộ đầu dịch đồng bộ →
+        #   ear-nose và ear-eye thay đổi cùng tỷ lệ → ratio ỔN ĐỊNH
+        # =====================================================
+
+        ear_nose_dist = self._distance(left_ear, nose)
+        ear_eye_dist = self._distance(left_ear, eye_center)
+
+        ear_nose_depth_proxy = float(
+            ear_nose_dist / max(ear_eye_dist, 1e-6)
+        )
+
+        # =====================================================
+        # FEATURE 32 (V03 Depth Proxy D4)
+        # left_eye→nose / right_eye→nose
+        #
+        # Forward slouch: đầu cúi nhưng không xoay → ≈ 1.0
+        # Lean right: đầu xoay sang phải → ≠ 1.0
+        #
+        # Proxy cho YAW rotation của đầu.
+        # =====================================================
+
+        left_eye_nose_dist = self._distance(left_eye, nose)
+        right_eye_nose_dist = self._distance(right_eye, nose)
+
+        face_rotation_proxy = float(
+            left_eye_nose_dist
+            / max(right_eye_nose_dist, 1e-6)
+        )
+
+        # =====================================================
         # Final feature vector
         # =====================================================
 
         features = np.array(
             [
+                # --- V02 features (1-29) ---
                 shoulder_angle,
                 eye_shoulder_angle,
                 eye_vertical_difference,
@@ -561,7 +629,12 @@ class FeatureExtractor:
 
                 nose_body_angle,
                 ear_body_angle,
-                head_axis_angle_spread
+                head_axis_angle_spread,
+
+                # --- V03 Depth Proxy features (30-32) ---
+                face_shoulder_scale_ratio,
+                ear_nose_depth_proxy,
+                face_rotation_proxy,
             ],
             dtype=np.float32
         )

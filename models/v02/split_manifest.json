@@ -33,7 +33,7 @@
     "person07__session02",
     "person07__session03",
     "person08__session01",
-    "person09__session02",
+    "person09__session01",
     "person11__session01",
     "person13__session01",
     "person14__session01"
@@ -41,7 +41,7 @@
   "test_recording_ids": [
     "person01__session01",
     "person10__session01",
-    "person12__session02"
+    "person12__session01"
   ],
   "train_samples": 3307,
   "test_samples": 707,
@@ -60,5 +60,5 @@
   "person_overlap": [],
   "recording_overlap": [],
   "dataset_path": "data\\processed\\features.csv",
-  "dataset_sha256": "04c5d035e5c7d4836a60d39a2c9f159952d18c80171a188fdad19dc414158978"
+  "dataset_sha256": "2bc189b67d6ac75dc8a95dfb487c743b16af0f99172eebf28ce725b6c5abbb62"
 }

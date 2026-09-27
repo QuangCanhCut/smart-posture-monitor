@@ -1,0 +1,31 @@
+{
+  "evaluation_timestamp": "2026-09-26T20:34:56.495694+00:00",
+  "model_name": "SVM RBF Tuned",
+  "dataset_sha256": "2bc189b67d6ac75dc8a95dfb487c743b16af0f99172eebf28ce725b6c5abbb62",
+  "test_persons": [
+    "person01",
+    "person10",
+    "person12"
+  ],
+  "test_samples": 707,
+  "test_recordings": 3,
+  "class_order": [
+    "correct",
+    "forward_slouch",
+    "lean_left",
+    "lean_right"
+  ],
+  "overall_metrics": {
+    "accuracy": 0.7934936350777935,
+    "balanced_accuracy": 0.7880754019909999,
+    "macro_precision": 0.7842270113330748,
+    "macro_recall": 0.7880754019909999,
+    "macro_f1": 0.7791264727955565,
+    "weighted_f1": 0.796575644693423
+  },
+  "selected_model_cv_macro_f1_mean": 0.6071303819799899,
+  "selected_model_cv_macro_f1_std": 0.17012280268736263,
+  "heldout_minus_cv_macro_f1": 0.17199609081556655,
+  "correct_predictions": 561,
+  "incorrect_predictions": 146
+}

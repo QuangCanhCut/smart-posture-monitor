@@ -1,12 +1,12 @@
 {
   "model_name": "SVM RBF Tuned",
   "best_params": {
-    "model__C": 1,
+    "model__C": 10,
     "model__class_weight": null,
     "model__gamma": 0.001
   },
-  "cv_macro_f1_mean": 0.5948859559768567,
-  "cv_macro_f1_std": 0.1718627669086666,
+  "cv_macro_f1_mean": 0.6071303819799899,
+  "cv_macro_f1_std": 0.17012280268736263,
   "feature_columns": [
     "shoulder_angle",
     "eye_shoulder_angle",
@@ -36,12 +36,9 @@
     "head_height_spread",
     "nose_body_angle",
     "ear_body_angle",
-    "head_axis_angle_spread",
-    "face_shoulder_scale_ratio",
-    "ear_nose_depth_proxy",
-    "face_rotation_proxy"
+    "head_axis_angle_spread"
   ],
-  "n_features": 32,
+  "n_features": 29,
   "classes": [
     "correct",
     "forward_slouch",
@@ -94,7 +91,7 @@
     "lean_left": 226,
     "lean_right": 177
   },
-  "dataset_sha256": "04c5d035e5c7d4836a60d39a2c9f159952d18c80171a188fdad19dc414158978",
+  "dataset_sha256": "2bc189b67d6ac75dc8a95dfb487c743b16af0f99172eebf28ce725b6c5abbb62",
   "dataset_path": "data\\processed\\features.csv",
-  "training_timestamp": "2026-09-27T14:06:39.711828+00:00"
+  "training_timestamp": "2026-09-26T19:42:21.644869+00:00"
 }

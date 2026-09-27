@@ -58,7 +58,7 @@ class DatasetBuilder:
         data/rejected/rejected_images.csv
     """
 
-    EXPECTED_FEATURE_COUNT = 29
+    EXPECTED_FEATURE_COUNT = len(FeatureExtractor.FEATURE_NAMES)
 
     VALID_LABELS = {
         "correct",

@@ -2,7 +2,7 @@
 Realtime webcam smoke test for Smart Posture Monitor V02.
 
 Pipeline:
-Webcam -> PoseDetector -> FeatureExtractor (29 features)
+Webcam -> PoseDetector -> FeatureExtractor (32 features)
        -> best_model.joblib -> predicted posture
 
 Run from project root:
@@ -108,9 +108,10 @@ def validate_feature_schema(
             f"Trained : {feature_columns}"
         )
 
-    if len(feature_columns) != 29:
+    expected_count = len(FeatureExtractor.FEATURE_NAMES)
+    if len(feature_columns) != expected_count:
         raise RuntimeError(
-            f"V02 kỳ vọng 29 features nhưng metadata có "
+            f"Kỳ vọng {expected_count} features nhưng metadata có "
             f"{len(feature_columns)}."
         )
 
