@@ -37,7 +37,8 @@ class PoseDetector:
     def __init__(
         self,
         model_path=None,
-        person_conf_threshold=0.5
+        person_conf_threshold=0.5,
+        device=None
     ):
         """
         model_path:
@@ -48,6 +49,11 @@ class PoseDetector:
 
         person_conf_threshold:
             Ngưỡng confidence tối thiểu của person.
+
+        device:
+            Thiết bị tính toán: 'cpu', 'cuda', 'cuda:0', hoặc None (tự động phát hiện).
+            Nếu CUDA không tương thích với GPU (ví dụ GPU thế hệ mới chưa được build trong PyTorch),
+            detector sẽ tự động fallback sang 'cpu'.
         """
 
         # =====================================================
@@ -95,6 +101,7 @@ class PoseDetector:
         self.person_conf_threshold = (
             person_conf_threshold
         )
+        self.device = device
 
     # =========================================================
     # Main function
@@ -153,14 +160,28 @@ class PoseDetector:
             )
 
         # =====================================================
-        # 2. Chạy YOLO Pose
+        # 2. Chạy YOLO Pose (hỗ trợ fallback CPU khi CUDA lỗi)
         # =====================================================
 
-        results = self.model.predict(
-            source=frame,
-            conf=self.person_conf_threshold,
-            verbose=False
-        )
+        predict_kwargs = {
+            "source": frame,
+            "conf": self.person_conf_threshold,
+            "verbose": False
+        }
+        if self.device is not None:
+            predict_kwargs["device"] = self.device
+
+        try:
+            results = self.model.predict(**predict_kwargs)
+        except Exception as error:
+            # Nếu GPU không hỗ trợ (ví dụ AcceleratorError do CC 12.0)
+            # tự động fallback sang CPU
+            if self.device != "cpu":
+                self.device = "cpu"
+                predict_kwargs["device"] = "cpu"
+                results = self.model.predict(**predict_kwargs)
+            else:
+                raise error
 
         if len(results) == 0:
             return None

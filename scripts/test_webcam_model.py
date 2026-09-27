@@ -320,18 +320,20 @@ def run_webcam(
     model_path: Path,
     metadata_path: Path,
     show_pose: bool,
+    device: str | None = None,
 ) -> None:
     print("=" * 68)
     print("SMART POSTURE MONITOR - V02 REALTIME WEBCAM TEST")
     print("=" * 68)
     print(f"Model    : {model_path}")
     print(f"Metadata : {metadata_path}")
+    print(f"Device   : {device if device else 'auto'}")
 
     model, metadata = load_artifacts(model_path, metadata_path)
     feature_columns = validate_feature_schema(model, metadata)
     id_to_label = get_id_to_label(metadata)
 
-    detector = PoseDetector()
+    detector = PoseDetector(device=device)
     extractor = FeatureExtractor()
 
     capture = cv2.VideoCapture(camera_index)
@@ -450,6 +452,12 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Không vẽ bbox/keypoints để giảm overhead.",
     )
+    parser.add_argument(
+        "--device",
+        type=str,
+        default=None,
+        help="Thiết bị chạy model: 'cpu', 'cuda', hoặc None (mặc định tự động, tự fallback CPU nếu CUDA lỗi).",
+    )
     return parser.parse_args()
 
 
@@ -470,6 +478,7 @@ def main() -> None:
         model_path=model_path.resolve(),
         metadata_path=metadata_path.resolve(),
         show_pose=not args.no_pose,
+        device=args.device,
     )
 
 
