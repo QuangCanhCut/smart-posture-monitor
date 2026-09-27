@@ -324,7 +324,7 @@ def run_webcam(
     device: str | None = None,
 ) -> None:
     print("=" * 68)
-    print("SMART POSTURE MONITOR - V02 REALTIME WEBCAM TEST")
+    print("SMART POSTURE MONITOR - V03 REALTIME WEBCAM TEST")
     print("=" * 68)
     print(f"Model    : {model_path}")
     print(f"Metadata : {metadata_path}")
