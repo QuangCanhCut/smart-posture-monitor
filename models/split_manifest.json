@@ -1,0 +1,64 @@
+{
+  "split_strategy": "GroupShuffleSplit person holdout",
+  "group_column": "person_id",
+  "recording_column": "recording_id",
+  "random_state": 42,
+  "test_size": 0.2,
+  "test_person_ids_config": null,
+  "train_persons": [
+    "person02",
+    "person03",
+    "person04",
+    "person05",
+    "person06",
+    "person07",
+    "person08",
+    "person09",
+    "person11",
+    "person13",
+    "person14"
+  ],
+  "test_persons": [
+    "person01",
+    "person10",
+    "person12"
+  ],
+  "train_recording_ids": [
+    "person02__session01",
+    "person03__session01",
+    "person04__session01",
+    "person05__session01",
+    "person06__session01",
+    "person07__session01",
+    "person07__session02",
+    "person07__session03",
+    "person08__session01",
+    "person09__session01",
+    "person11__session01",
+    "person13__session01",
+    "person14__session01"
+  ],
+  "test_recording_ids": [
+    "person01__session01",
+    "person10__session01",
+    "person12__session01"
+  ],
+  "train_samples": 3307,
+  "test_samples": 707,
+  "train_class_distribution": {
+    "correct": 879,
+    "forward_slouch": 757,
+    "lean_left": 828,
+    "lean_right": 843
+  },
+  "test_class_distribution": {
+    "correct": 172,
+    "forward_slouch": 132,
+    "lean_left": 226,
+    "lean_right": 177
+  },
+  "person_overlap": [],
+  "recording_overlap": [],
+  "dataset_path": "data\\processed\\features.csv",
+  "dataset_sha256": "2bc189b67d6ac75dc8a95dfb487c743b16af0f99172eebf28ce725b6c5abbb62"
+}

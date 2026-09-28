@@ -1,0 +1,11 @@
+ultralytics
+opencv-python
+numpy
+pandas
+scikit-learn
+matplotlib
+xgboost
+joblib
+ipykernel
+pytest
+tabulate

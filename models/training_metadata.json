@@ -1,0 +1,97 @@
+{
+  "model_name": "SVM RBF Tuned",
+  "best_params": {
+    "model__C": 10,
+    "model__class_weight": null,
+    "model__gamma": 0.001
+  },
+  "cv_macro_f1_mean": 0.6071303819799899,
+  "cv_macro_f1_std": 0.17012280268736263,
+  "feature_columns": [
+    "shoulder_angle",
+    "eye_shoulder_angle",
+    "eye_vertical_difference",
+    "nose_x_body",
+    "nose_y_body",
+    "eye_center_x_body",
+    "eye_center_y_body",
+    "left_ear_x_body",
+    "left_ear_y_body",
+    "nose_eye_dx",
+    "nose_eye_dy",
+    "eye_width_ratio",
+    "ear_eye_ratio",
+    "nose_shoulder_center_distance",
+    "eye_shoulder_center_distance",
+    "nose_shoulder_asymmetry",
+    "eye_shoulder_asymmetry",
+    "nose_ear_ratio",
+    "head_body_angle",
+    "head_gravity_angle",
+    "nose_gravity_angle",
+    "face_pitch_angle",
+    "eye_vertical_axis_offset",
+    "nose_vertical_axis_offset",
+    "head_mean_height",
+    "head_height_spread",
+    "nose_body_angle",
+    "ear_body_angle",
+    "head_axis_angle_spread"
+  ],
+  "n_features": 29,
+  "classes": [
+    "correct",
+    "forward_slouch",
+    "lean_left",
+    "lean_right"
+  ],
+  "label_to_id": {
+    "correct": 0,
+    "forward_slouch": 1,
+    "lean_left": 2,
+    "lean_right": 3
+  },
+  "id_to_label": {
+    "0": "correct",
+    "1": "forward_slouch",
+    "2": "lean_left",
+    "3": "lean_right"
+  },
+  "random_state": 42,
+  "n_splits": 5,
+  "train_persons": [
+    "person02",
+    "person03",
+    "person04",
+    "person05",
+    "person06",
+    "person07",
+    "person08",
+    "person09",
+    "person11",
+    "person13",
+    "person14"
+  ],
+  "test_persons": [
+    "person01",
+    "person10",
+    "person12"
+  ],
+  "train_samples": 3307,
+  "test_samples": 707,
+  "train_class_distribution": {
+    "correct": 879,
+    "forward_slouch": 757,
+    "lean_left": 828,
+    "lean_right": 843
+  },
+  "test_class_distribution": {
+    "correct": 172,
+    "forward_slouch": 132,
+    "lean_left": 226,
+    "lean_right": 177
+  },
+  "dataset_sha256": "2bc189b67d6ac75dc8a95dfb487c743b16af0f99172eebf28ce725b6c5abbb62",
+  "dataset_path": "data\\processed\\features.csv",
+  "training_timestamp": "2026-09-26T19:42:21.644869+00:00"
+}

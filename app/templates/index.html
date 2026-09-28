@@ -1,0 +1,1615 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Smart Posture Monitor - Ergonomics Dashboard</title>
+    <link
+      rel="icon"
+      href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🐧</text></svg>"
+    />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Chart.js cho Posture Analytics -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+      @import url("https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap");
+      body {
+        font-family: "Plus Jakarta Sans", sans-serif;
+      }
+      .custom-scrollbar::-webkit-scrollbar {
+        width: 5px;
+      }
+      .custom-scrollbar::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      .custom-scrollbar::-webkit-scrollbar-thumb {
+        background: #94a3b8;
+        border-radius: 9999px;
+      }
+      .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+        background: #64748b;
+      }
+    </style>
+  </head>
+  <body
+    class="bg-[#f8fafc] text-slate-800 min-h-screen flex flex-col antialiased selection:bg-indigo-500 selection:text-white"
+  >
+    <!-- Header chuẩn nhận diện thương hiệu -->
+    <header
+      class="border-b border-sky-100/80 bg-gradient-to-r from-sky-50/90 via-slate-50/90 to-blue-50/60 backdrop-blur-md sticky top-0 z-40 transition-all"
+    >
+      <div
+        class="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between"
+      >
+        <!-- Brand Info -->
+        <div class="flex items-center gap-3.5">
+          <div
+            class="w-10 h-10 bg-gradient-to-tr from-sky-500 to-blue-600 text-white rounded-xl flex items-center justify-center shadow-md shadow-sky-200/60 text-xl select-none shrink-0"
+          >
+            <span class="text-2xl transform -translate-y-0.5">🐧</span>
+          </div>
+          <div>
+            <div class="flex items-center gap-2.5">
+              <h1
+                class="font-bold text-[19px] text-slate-900 tracking-tight leading-none"
+              >
+                Smart Posture Monitor
+              </h1>
+              <span
+                class="text-[10px] font-bold tracking-wide uppercase bg-white/90 text-sky-700 px-2 py-0.5 rounded-full border border-sky-200 shadow-2xs"
+                >v0.2 • YOLO Pose</span
+              >
+            </div>
+            <p class="text-xs text-slate-600 mt-1 font-semibold">
+              AI-Powered Ergonomic Monitoring
+            </p>
+          </div>
+        </div>
+
+        <!-- Toolbar Buttons -->
+        <div class="flex items-center gap-2.5">
+          <div
+            id="connection-status"
+            class="inline-flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-bold rounded-full bg-white/95 text-emerald-800 border border-emerald-300 shadow-2xs"
+          >
+            <span
+              class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"
+            ></span>
+            <span>Hệ thống sẵn sàng</span>
+          </div>
+
+          <button
+            id="btn-open-settings"
+            title="Cài đặt hệ thống"
+            class="w-8 h-8 flex items-center justify-center text-slate-700 hover:text-slate-900 bg-white/90 border border-slate-300 rounded-lg hover:bg-slate-100 transition shadow-2xs cursor-pointer"
+          >
+            <i data-lucide="settings" class="w-4 h-4"></i>
+          </button>
+
+          <button
+            id="btn-sound-toggle"
+            title="Bật/Tắt chuông"
+            class="w-8 h-8 flex items-center justify-center text-slate-700 hover:text-slate-900 bg-white/90 border border-slate-300 rounded-lg hover:bg-slate-100 transition shadow-2xs cursor-pointer"
+          >
+            <i data-lucide="volume-2" class="w-4 h-4"></i>
+          </button>
+
+          <button
+            id="btn-reset"
+            title="Đặt lại phiên"
+            class="px-2.5 py-1.5 text-xs font-semibold text-slate-600 hover:text-slate-900 hover:bg-slate-200/60 rounded-lg transition flex items-center gap-1.5 cursor-pointer border border-transparent hover:border-slate-300"
+          >
+            <i data-lucide="rotate-ccw" class="w-3.5 h-3.5 text-slate-600"></i>
+            <span>Đặt lại phiên</span>
+          </button>
+
+          <button
+            id="btn-end-session"
+            class="px-3.5 py-1.5 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-lg transition flex items-center gap-1.5 shadow-xs cursor-pointer active:scale-95"
+          >
+            <i data-lucide="square" class="w-3.5 h-3.5 fill-current"></i>
+            <span>Kết thúc phiên</span>
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="max-w-7xl mx-auto px-6 py-6 space-y-6 flex-1 w-full">
+      <!-- HÀNG TRÊN CÙNG: 4 THẺ CHỈ SỐ (2x2) SONG SONG VỚI GỢI Ý CÔNG THÁI HỌC -->
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch">
+        <!-- Cột Trái (8 Cột): 4 Thẻ chỉ số chia ma trận 2 Hàng x 2 Cột -->
+        <div class="lg:col-span-8 grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <!-- Thẻ 1: Tư thế hiện tại -->
+          <div
+            class="bg-white p-4 rounded-2xl border border-slate-200 shadow-[0_2px_8px_rgba(0,0,0,0.03)] flex flex-col justify-between hover:border-slate-300 transition"
+          >
+            <div
+              class="flex items-center justify-between text-[11px] font-extrabold tracking-wider text-slate-600 uppercase"
+            >
+              <span>Tư thế hiện tại</span>
+              <div
+                class="w-7 h-7 rounded-lg bg-slate-100 text-slate-600 flex items-center justify-center"
+              >
+                <i data-lucide="user" class="w-4 h-4"></i>
+              </div>
+            </div>
+            <div class="my-2">
+              <span
+                id="badge-posture"
+                class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-sm font-extrabold bg-slate-100 text-slate-700 border border-slate-300 shadow-2xs"
+              >
+                <span class="w-2 h-2 rounded-full bg-slate-500"></span> Chờ khởi
+                động
+              </span>
+            </div>
+            <div class="text-[11px] font-semibold text-slate-600">
+              Độ tin cậy:
+              <span id="metric-prob" class="font-extrabold text-slate-900"
+                >--</span
+              >
+            </div>
+          </div>
+
+          <!-- Thẻ 2: Điểm công thái học -->
+          <div
+            class="bg-white p-4 rounded-2xl border border-slate-200 shadow-[0_2px_8px_rgba(0,0,0,0.03)] flex flex-col justify-between hover:border-slate-300 transition"
+          >
+            <div
+              class="flex items-center justify-between text-[11px] font-extrabold tracking-wider text-slate-600 uppercase"
+            >
+              <span>Điểm công thái học</span>
+              <div
+                class="w-7 h-7 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center"
+              >
+                <i data-lucide="shield-check" class="w-4 h-4"></i>
+              </div>
+            </div>
+            <div class="my-1 flex items-baseline gap-2.5">
+              <span
+                id="stat-score"
+                class="text-3xl font-extrabold text-slate-900 tracking-tight"
+                >--</span
+              >
+              <span
+                id="badge-score-rating"
+                class="text-[11px] font-extrabold px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 uppercase tracking-wide border border-slate-300"
+                >Chờ phiên</span
+              >
+            </div>
+            <div class="space-y-1">
+              <div
+                class="w-full bg-slate-100 rounded-full h-2 overflow-hidden border border-slate-200"
+              >
+                <div
+                  id="stat-score-bar"
+                  class="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                  style="width: 0%"
+                ></div>
+              </div>
+              <div
+                class="flex justify-between text-[10px] font-bold text-slate-600"
+              >
+                <span>0</span>
+                <span class="text-slate-700">Ngưỡng tối ưu: 85+</span>
+                <span>100</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Thẻ 3: Thời gian phiên -->
+          <div
+            class="bg-white p-4 rounded-2xl border border-slate-200 shadow-[0_2px_8px_rgba(0,0,0,0.03)] flex flex-col justify-between hover:border-slate-300 transition"
+          >
+            <div
+              class="flex items-center justify-between text-[11px] font-extrabold tracking-wider text-slate-600 uppercase"
+            >
+              <span>Thời gian phiên</span>
+              <div
+                class="w-7 h-7 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center"
+              >
+                <i data-lucide="clock" class="w-4 h-4"></i>
+              </div>
+            </div>
+            <div class="my-1">
+              <span
+                id="stat-session-time"
+                class="text-3xl font-extrabold text-indigo-700 tracking-tight font-mono"
+                >00:00:00</span
+              >
+            </div>
+            <div class="text-[11px] font-semibold text-slate-600">
+              Đúng chuẩn:
+              <span
+                id="stat-correct-detail"
+                class="text-slate-900 font-extrabold"
+                >--</span
+              >
+            </div>
+          </div>
+
+          <!-- Thẻ 4: Cảnh báo sai tư thế -->
+          <div
+            id="card-alerts-container"
+            class="bg-white p-4 rounded-2xl border border-slate-200 shadow-[0_2px_8px_rgba(0,0,0,0.03)] flex flex-col justify-between hover:border-slate-300 transition"
+          >
+            <div
+              class="flex items-center justify-between text-[11px] font-extrabold tracking-wider text-slate-600 uppercase"
+            >
+              <span>Cảnh báo sai tư thế</span>
+              <div
+                id="icon-alert-box"
+                class="w-7 h-7 rounded-lg bg-slate-100 text-slate-600 flex items-center justify-center"
+              >
+                <i data-lucide="bell" class="w-4 h-4"></i>
+              </div>
+            </div>
+            <div class="my-1 flex items-baseline gap-1.5">
+              <span
+                id="stat-alerts"
+                class="text-3xl font-extrabold text-slate-900 tracking-tight transition"
+                >0</span
+              >
+              <span class="text-xs text-slate-600 font-bold">lần vi phạm</span>
+            </div>
+            <div class="text-[11px] font-semibold text-slate-600">
+              Ngưỡng báo động:
+              <span
+                id="txt-alert-threshold-label"
+                class="font-extrabold text-slate-800"
+                >> 2.0s liên tục</span
+              >
+            </div>
+          </div>
+        </div>
+
+        <!-- Cột Phải (4 Cột): Khối Gợi Ý Cho Bạn (Tích hợp logic nhắc nghỉ thông minh) -->
+        <div
+          class="lg:col-span-4 bg-white p-5 rounded-2xl border border-slate-200 shadow-[0_2px_8px_rgba(0,0,0,0.03)] flex flex-col justify-between"
+        >
+          <div>
+            <h3
+              class="font-extrabold text-slate-900 text-sm mb-3.5 flex items-center gap-2"
+            >
+              <i data-lucide="sparkles" class="w-4 h-4 text-sky-600"></i>
+              Gợi ý cho bạn
+            </h3>
+            <div class="space-y-3 text-xs">
+              <!-- Gợi ý 1: Hướng dẫn sửa dáng ngồi trực tiếp -->
+              <div class="flex items-start gap-3">
+                <div
+                  id="tip-icon-1-box"
+                  class="p-1.5 rounded-lg bg-sky-50 text-sky-600 shrink-0 mt-0.5 border border-sky-100 transition-colors"
+                >
+                  <i
+                    id="tip-icon-1"
+                    data-lucide="arrow-up"
+                    class="w-3.5 h-3.5"
+                  ></i>
+                </div>
+                <p
+                  id="tip-text-1"
+                  class="text-slate-700 font-semibold leading-relaxed"
+                >
+                  Nâng màn hình cao hơn một chút để giảm cúi cổ.
+                </p>
+              </div>
+
+              <!-- Gợi ý 2: Nhắc nhở nghỉ giải lao (Chu kỳ 45 phút) -->
+              <div class="flex items-start gap-3">
+                <div
+                  id="tip-icon-2-box"
+                  class="p-1.5 rounded-lg bg-emerald-50 text-emerald-600 shrink-0 mt-0.5 border border-emerald-100 transition-colors"
+                >
+                  <i
+                    id="tip-icon-2"
+                    data-lucide="footprints"
+                    class="w-3.5 h-3.5"
+                  ></i>
+                </div>
+                <p
+                  id="tip-text-2"
+                  class="text-slate-700 font-semibold leading-relaxed transition-colors"
+                >
+                  Đứng dậy vận động 2 phút sau mỗi 45 phút.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Dòng xuất báo cáo phía đáy thẻ gợi ý -->
+          <div class="pt-3 border-t border-slate-100 mt-4">
+            <button
+              id="btn-export-csv-quick"
+              class="text-xs text-slate-600 hover:text-slate-900 font-bold flex items-center gap-2 hover:underline cursor-pointer transition"
+            >
+              <i data-lucide="file-down" class="w-4 h-4 text-slate-400"></i>
+              <span>Xuất báo cáo phiên dưới dạng CSV.</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- HÀNG 2: Khu vực Webcam + Posture Analytics + Góc sinh trắc + Nhật ký -->
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- CỘT TRÁI (2 Cols): Khung Camera Rộng + Posture Analytics phía dưới -->
+        <div class="lg:col-span-2 space-y-6">
+          <!-- Khối Camera Đầy Đủ -->
+          <div
+            class="bg-white rounded-2xl border border-slate-200 shadow-[0_4px_16px_rgba(0,0,0,0.02)] p-4 space-y-3.5"
+          >
+            <div class="flex items-center justify-between">
+              <div
+                class="flex items-center gap-2 text-xs font-bold text-slate-800"
+              >
+                <span class="p-1 rounded bg-slate-100 text-slate-600"
+                  ><i data-lucide="webcam" class="w-4 h-4"></i
+                ></span>
+                <span>Webcam AI Real-time</span>
+              </div>
+              <div
+                class="flex items-center gap-2.5 text-[11px] font-mono text-slate-600 bg-slate-100/80 px-2.5 py-1 rounded-md border border-slate-200 font-bold"
+              >
+                <span class="flex items-center gap-1.5"
+                  ><span class="w-2 h-2 rounded-full bg-emerald-500"></span
+                  ><span id="metric-fps" class="text-slate-900 font-extrabold"
+                    >10</span
+                  >
+                  FPS</span
+                >
+                <span class="text-slate-400">|</span>
+                <span id="metric-ping" class="text-slate-700">0 ms</span>
+              </div>
+            </div>
+
+            <!-- Màn hình Camera 16:10 -->
+            <div
+              class="relative w-full bg-slate-950 rounded-xl aspect-[16/10] overflow-hidden flex items-center justify-center shadow-inner"
+            >
+              <video
+                id="webcam"
+                autoplay
+                playsinline
+                muted
+                class="hidden"
+              ></video>
+              <canvas
+                id="output-canvas"
+                class="w-full h-full object-cover"
+              ></canvas>
+
+              <div
+                id="cam-placeholder"
+                class="absolute inset-0 flex flex-col items-center justify-center text-center p-6 bg-gradient-to-b from-slate-900/95 to-slate-950 text-white z-10 backdrop-blur-xs"
+              >
+                <div
+                  class="w-14 h-14 rounded-2xl bg-white/10 border border-white/15 flex items-center justify-center mb-3 shadow-lg"
+                >
+                  <i data-lucide="video-off" class="w-7 h-7 text-slate-300"></i>
+                </div>
+                <p class="font-bold text-sm tracking-tight text-white">
+                  Camera đang ở trạng thái nghỉ
+                </p>
+                <p
+                  class="text-xs text-slate-300 mt-1.5 max-w-sm mb-5 leading-relaxed font-medium"
+                >
+                  Hệ thống sẽ ước tính khung xương 6 điểm và theo dõi góc
+                  nghiêng vai, đầu để nhắc nhở tư thế.
+                </p>
+                <button
+                  id="btn-cam-placeholder"
+                  class="px-5 py-2.5 bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-500 hover:to-indigo-500 text-white text-xs font-bold rounded-xl shadow-lg shadow-sky-600/30 transition flex items-center gap-2 cursor-pointer active:scale-95"
+                >
+                  <i data-lucide="play" class="w-4 h-4 fill-current"></i> Bật
+                  Webcam Ngay
+                </button>
+              </div>
+
+              <!-- Banner cảnh báo đỏ -->
+              <div
+                id="alert-banner"
+                class="hidden absolute top-4 inset-x-5 bg-gradient-to-r from-rose-600 to-red-600 text-white text-xs py-2.5 px-4 rounded-xl backdrop-blur-md flex items-center justify-between shadow-lg shadow-rose-600/30 border border-white/20 animate-pulse z-20"
+              >
+                <div class="flex items-center gap-2.5 font-bold">
+                  <i
+                    data-lucide="alert-triangle"
+                    class="w-4 h-4 text-amber-300"
+                  ></i>
+                  <span
+                    >Cảnh báo: Bạn đang ngồi sai tư thế liên tục! Hãy ngồi thẳng
+                    lưng lại.</span
+                  >
+                </div>
+              </div>
+            </div>
+
+            <!-- Footer nút camera & Tên model -->
+            <div
+              class="flex items-center justify-between pt-3 border-t border-slate-200 text-xs"
+            >
+              <div class="flex items-center gap-2">
+                <button
+                  id="btn-toggle-cam"
+                  class="px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold flex items-center gap-2 transition shadow-xs cursor-pointer active:scale-95"
+                >
+                  <i data-lucide="camera" class="w-4 h-4"></i>
+                  <span id="btn-cam-text">Bật Webcam</span>
+                </button>
+                <button
+                  id="btn-toggle-skeleton"
+                  class="px-3.5 py-2 rounded-xl border border-slate-300 text-slate-700 hover:bg-slate-100 hover:text-slate-900 font-bold flex items-center gap-1.5 transition cursor-pointer"
+                >
+                  <i data-lucide="spline" class="w-4 h-4 text-slate-600"></i>
+                  <span id="btn-skeleton-text">Ẩn Khung xương</span>
+                </button>
+              </div>
+              <div
+                class="flex items-center gap-2 text-slate-600 font-bold bg-slate-100/90 px-3 py-1.5 rounded-lg border border-slate-200"
+              >
+                <i data-lucide="cpu" class="w-4 h-4 text-indigo-600"></i>
+                <span
+                  >Model:
+                  <strong
+                    id="info-model-label"
+                    class="text-slate-900 font-extrabold"
+                    >SVM RBF Tuned</strong
+                  ></span
+                >
+              </div>
+            </div>
+          </div>
+
+          <!-- POSTURE ANALYTICS DƯỚI CAMERA -->
+          <div
+            class="bg-white rounded-2xl border border-slate-200 shadow-[0_4px_16px_rgba(0,0,0,0.02)] p-5 space-y-3.5"
+          >
+            <div class="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <h3
+                  class="font-extrabold text-slate-900 text-sm flex items-center gap-2"
+                >
+                  <i data-lucide="trending-up" class="w-4 h-4 text-sky-600"></i>
+                  Posture Analytics
+                </h3>
+                <p
+                  id="analytics-insight-text"
+                  class="text-xs text-slate-500 font-semibold mt-0.5"
+                >
+                  Chưa có dữ liệu phiên. Hãy bật webcam để bắt đầu ghi nhận biểu
+                  đồ.
+                </p>
+              </div>
+              <div class="flex items-center gap-4 text-xs font-bold">
+                <span
+                  class="inline-flex items-center gap-1.5 text-slate-600 font-semibold bg-slate-100 px-2.5 py-1 rounded-md border border-slate-200"
+                >
+                  <i
+                    data-lucide="calendar"
+                    class="w-3.5 h-3.5 text-slate-500"
+                  ></i>
+                  <span id="analytics-date-label">Phiên hôm nay</span>
+                </span>
+                <span class="inline-flex items-center gap-1.5 text-emerald-700"
+                  ><span class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
+                  Ngồi đúng</span
+                >
+                <span class="inline-flex items-center gap-1.5 text-rose-700"
+                  ><span class="w-2.5 h-2.5 rounded-full bg-rose-500"></span>
+                  Ngồi sai</span
+                >
+              </div>
+            </div>
+
+            <!-- Khung Chart.js -->
+            <div class="relative w-full h-56 pt-2">
+              <canvas id="postureAnalyticsChart"></canvas>
+              <div
+                id="chart-empty-placeholder"
+                class="absolute inset-0 flex flex-col items-center justify-center bg-white/90 backdrop-blur-[1px] text-center z-10"
+              >
+                <div
+                  class="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 mb-2"
+                >
+                  <i data-lucide="line-chart" class="w-5 h-5"></i>
+                </div>
+                <p class="text-xs font-bold text-slate-700">
+                  Chưa có dữ liệu biểu đồ
+                </p>
+                <p class="text-[11px] text-slate-400 font-medium mt-0.5">
+                  Bật webcam và duy trì phiên để hệ thống tổng hợp xu hướng theo
+                  từng phút.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- CỘT PHẢI (1 Col): Góc sinh trắc & Nhật ký Timeline -->
+        <div class="space-y-6">
+          <!-- Góc Sinh trắc học Real-time -->
+          <div
+            class="bg-white rounded-2xl border border-slate-200 shadow-[0_4px_16px_rgba(0,0,0,0.02)] p-4 space-y-4"
+          >
+            <div
+              class="flex items-center justify-between text-xs pb-2 border-b border-slate-200"
+            >
+              <h3
+                class="font-extrabold text-slate-900 flex items-center gap-1.5"
+              >
+                <i data-lucide="compass" class="w-4 h-4 text-indigo-600"></i>
+                Góc Sinh trắc học Real-time
+              </h3>
+              <span
+                class="text-[10px] font-extrabold uppercase tracking-wider bg-slate-100 text-slate-700 px-2 py-0.5 rounded-md border border-slate-200"
+                id="info-features-count"
+                >29 Features</span
+              >
+            </div>
+
+            <!-- Góc nghiêng vai -->
+            <div class="space-y-1.5">
+              <div class="flex justify-between text-xs">
+                <span class="text-slate-600 font-bold"
+                  >Góc nghiêng vai (Shoulder)</span
+                >
+                <span
+                  class="font-extrabold text-slate-900 font-mono"
+                  id="angle-shoulder"
+                  >0.0°</span
+                >
+              </div>
+              <div
+                class="w-full bg-slate-100 rounded-full h-2 overflow-hidden border border-slate-200"
+              >
+                <div
+                  id="bar-shoulder"
+                  class="bg-emerald-500 h-2 rounded-full transition-all duration-200"
+                  style="width: 50%"
+                ></div>
+              </div>
+              <div
+                class="flex justify-between text-[10px] font-bold text-slate-600"
+              >
+                <span>-15°</span>
+                <span class="text-emerald-700 font-extrabold">Chuẩn (0°)</span>
+                <span>+15°</span>
+              </div>
+            </div>
+
+            <!-- Góc đầu - trọng lực -->
+            <div class="space-y-1.5">
+              <div class="flex justify-between text-xs">
+                <span class="text-slate-600 font-bold"
+                  >Góc đầu - trọng lực (Head Gravity)</span
+                >
+                <span
+                  class="font-extrabold text-slate-900 font-mono"
+                  id="angle-gravity"
+                  >0.0°</span
+                >
+              </div>
+              <div
+                class="w-full bg-slate-100 rounded-full h-2 overflow-hidden border border-slate-200"
+              >
+                <div
+                  id="bar-gravity"
+                  class="bg-sky-500 h-2 rounded-full transition-all duration-200"
+                  style="width: 20%"
+                ></div>
+              </div>
+              <div
+                class="flex justify-between text-[10px] font-bold text-slate-600"
+              >
+                <span class="text-sky-700 font-extrabold">0° Chuẩn</span>
+                <span>Bình thường (&lt; 25°)</span>
+                <span class="text-rose-700 font-extrabold">Cúi (> 45°)</span>
+              </div>
+            </div>
+
+            <!-- Góc đầu - thân -->
+            <div class="space-y-1.5">
+              <div class="flex justify-between text-xs">
+                <span class="text-slate-600 font-bold"
+                  >Góc đầu - thân (Head Body)</span
+                >
+                <span
+                  class="font-extrabold text-slate-900 font-mono"
+                  id="angle-head-body"
+                  >0.0°</span
+                >
+              </div>
+              <div
+                class="w-full bg-slate-100 rounded-full h-2 overflow-hidden border border-slate-200"
+              >
+                <div
+                  id="bar-head-body"
+                  class="bg-violet-600 h-2 rounded-full transition-all duration-200"
+                  style="width: 30%"
+                ></div>
+              </div>
+              <div
+                class="flex justify-between text-[10px] font-bold text-slate-600"
+              >
+                <span>-20°</span>
+                <span class="text-emerald-700 font-extrabold">Chuẩn (0°)</span>
+                <span>+20°</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Nhật ký Giám sát Trực tiếp (Timeline Cards) -->
+          <div
+            class="bg-white rounded-2xl border border-slate-200 shadow-[0_4px_16px_rgba(0,0,0,0.02)] p-4 space-y-3"
+          >
+            <div
+              class="flex items-center justify-between text-xs pb-2 border-b border-slate-200"
+            >
+              <h3
+                class="font-extrabold text-slate-900 flex items-center gap-1.5"
+              >
+                <i data-lucide="history" class="w-4 h-4 text-indigo-600"></i>
+                Nhật ký Giám sát Trực tiếp
+              </h3>
+              <button
+                id="btn-clear-logs"
+                class="text-[11px] text-slate-500 hover:text-rose-600 font-bold transition cursor-pointer"
+              >
+                Xóa nhật ký
+              </button>
+            </div>
+
+            <div
+              id="log-container"
+              class="space-y-2.5 overflow-y-auto max-h-80 pr-1 custom-scrollbar text-xs min-h-[220px]"
+            >
+              <div
+                id="empty-log-msg"
+                class="p-4 text-center text-slate-600 font-semibold text-xs bg-slate-50 rounded-xl border border-dashed border-slate-300"
+              >
+                Chưa có dữ liệu phiên mới. Nhấn "Bật Webcam" để bắt đầu theo
+                dõi.
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <!-- MODAL SESSION SUMMARY -->
+    <div
+      id="modal-summary"
+      class="hidden fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4"
+    >
+      <div
+        class="bg-white w-full max-w-lg rounded-3xl border border-slate-200 shadow-2xl p-6 space-y-5 animate-in fade-in zoom-in-95 duration-200"
+      >
+        <div
+          class="flex items-center justify-between pb-3 border-b border-slate-100"
+        >
+          <div class="flex items-center gap-3">
+            <div
+              class="w-10 h-10 rounded-2xl bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold"
+            >
+              <i data-lucide="award" class="w-5 h-5"></i>
+            </div>
+            <div>
+              <h3 class="font-extrabold text-slate-900 text-base">
+                Tổng kết phiên làm việc
+              </h3>
+              <p class="text-xs text-slate-500 font-medium">
+                Báo cáo đánh giá hiệu suất công thái học
+              </p>
+            </div>
+          </div>
+          <button
+            id="btn-close-summary"
+            class="text-slate-400 hover:text-slate-700 p-1.5 rounded-lg hover:bg-slate-100"
+          >
+            <i data-lucide="x" class="w-5 h-5"></i>
+          </button>
+        </div>
+
+        <!-- 4 Khối thống kê Bento bên trong Modal -->
+        <div class="grid grid-cols-2 gap-3 text-xs">
+          <div class="p-3.5 bg-slate-50 rounded-2xl border border-slate-200/80">
+            <span class="text-slate-500 font-bold block mb-1"
+              >Tổng thời gian</span
+            >
+            <span
+              id="modal-sum-time"
+              class="text-2xl font-extrabold text-slate-900 font-mono"
+              >00:00:00</span
+            >
+            <span class="text-[10px] text-slate-400 block mt-0.5"
+              >Hoàn thành phiên</span
+            >
+          </div>
+
+          <div
+            class="p-3.5 bg-emerald-50/70 rounded-2xl border border-emerald-200/80"
+          >
+            <span class="text-emerald-700 font-bold block mb-1"
+              >Tỷ lệ ngồi đúng</span
+            >
+            <span
+              id="modal-sum-good"
+              class="text-2xl font-extrabold text-emerald-700"
+              >--%</span
+            >
+            <span
+              id="modal-sum-rating"
+              class="text-[10px] text-emerald-600 font-semibold block mt-0.5"
+              >Xếp loại: --</span
+            >
+          </div>
+
+          <div
+            class="p-3.5 bg-rose-50/70 rounded-2xl border border-rose-200/80"
+          >
+            <span class="text-rose-700 font-bold block mb-1"
+              >Số lần cảnh báo</span
+            >
+            <span
+              id="modal-sum-alerts"
+              class="text-2xl font-extrabold text-rose-700"
+              >0 lần</span
+            >
+            <span class="text-[10px] text-rose-600 block mt-0.5"
+              >Lỗi tư thế vượt ngưỡng</span
+            >
+          </div>
+
+          <div
+            class="p-3.5 bg-indigo-50/70 rounded-2xl border border-indigo-200/80"
+          >
+            <span class="text-indigo-700 font-bold block mb-1"
+              >Thời gian nghỉ</span
+            >
+            <span
+              id="modal-sum-break"
+              class="text-2xl font-extrabold text-indigo-700 font-mono"
+              >05:00</span
+            >
+            <span class="text-[10px] text-indigo-600 block mt-0.5"
+              >Đạt chuẩn Pomodoro</span
+            >
+          </div>
+        </div>
+
+        <!-- Nhận xét AI -->
+        <div
+          class="p-3.5 bg-sky-50/60 rounded-2xl border border-sky-100 text-xs space-y-1"
+        >
+          <span class="font-bold text-sky-900 flex items-center gap-1.5">
+            <i data-lucide="sparkles" class="w-3.5 h-3.5 text-sky-600"></i> Nhận
+            xét từ AI:
+          </span>
+          <p
+            id="modal-sum-advice"
+            class="text-slate-600 leading-relaxed font-medium"
+          >
+            Hãy tiếp tục duy trì tư thế thẳng lưng và điều chỉnh độ cao màn hình
+            ngang tầm mắt khi làm việc.
+          </p>
+        </div>
+
+        <!-- Nút thao tác dưới Modal -->
+        <div class="pt-2 flex items-center justify-end gap-2.5">
+          <button
+            id="btn-modal-csv"
+            class="px-4 py-2 border border-slate-300 text-slate-700 hover:bg-slate-100 rounded-xl text-xs font-bold flex items-center gap-1.5 transition"
+          >
+            <i data-lucide="file-down" class="w-4 h-4"></i>
+            <span>Tải báo cáo CSV</span>
+          </button>
+          <button
+            id="btn-modal-new-session"
+            class="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition"
+          >
+            Bắt đầu phiên mới
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- MODAL SETTINGS -->
+    <div
+      id="modal-settings"
+      class="hidden fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-xs p-4"
+    >
+      <div
+        class="bg-white w-full max-w-md rounded-2xl border border-slate-300 shadow-xl p-5 space-y-4"
+      >
+        <div
+          class="flex items-center justify-between pb-3 border-b border-slate-200"
+        >
+          <div class="flex items-center gap-2">
+            <div class="p-1.5 bg-sky-100 text-sky-700 rounded-lg">
+              <i data-lucide="sliders" class="w-4 h-4"></i>
+            </div>
+            <h3 class="font-bold text-slate-900 text-sm">
+              Cài đặt giám sát & Ngưỡng báo động
+            </h3>
+          </div>
+          <button
+            id="btn-close-settings"
+            class="text-slate-500 hover:text-slate-800 p-1 rounded-md"
+          >
+            <i data-lucide="x" class="w-4 h-4"></i>
+          </button>
+        </div>
+
+        <div class="space-y-3.5 text-xs">
+          <div>
+            <label class="block font-bold text-slate-800 mb-1"
+              >Thời gian ngồi sai kích hoạt cảnh báo (giây)</label
+            >
+            <input
+              id="setting-alert-sec"
+              type="number"
+              min="1"
+              max="10"
+              value="2"
+              class="w-full px-3 py-2 border rounded-xl border-slate-300 text-slate-800 font-bold focus:outline-none focus:border-sky-500"
+            />
+            <p class="text-[11px] text-slate-600 font-semibold mt-1">
+              Hệ thống sẽ rung chuông nếu phát hiện sai liên tục quá số giây
+              này.
+            </p>
+          </div>
+          <div>
+            <label class="block font-bold text-slate-800 mb-1"
+              >Ngưỡng độ tin cậy AI (Confidence)</label
+            >
+            <input
+              id="setting-conf"
+              type="range"
+              min="0.3"
+              max="0.9"
+              step="0.05"
+              value="0.45"
+              class="w-full accent-sky-600"
+            />
+            <div
+              class="flex justify-between text-[11px] text-slate-700 font-bold mt-0.5"
+            >
+              <span>0.30</span>
+              <span id="txt-conf-val" class="font-extrabold text-slate-900"
+                >0.45</span
+              >
+              <span>0.90</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="pt-3 border-t border-slate-200 flex justify-end gap-2">
+          <button
+            id="btn-cancel-settings"
+            class="px-3.5 py-1.5 text-xs font-bold rounded-xl text-slate-700 hover:bg-slate-100"
+          >
+            Hủy
+          </button>
+          <button
+            id="btn-save-settings"
+            class="px-4 py-1.5 text-xs font-bold rounded-xl bg-sky-600 hover:bg-sky-700 text-white shadow-xs"
+          >
+            Lưu cài đặt
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- SCRIPT CHÍNH -->
+    <script>
+      lucide.createIcons();
+
+      const video = document.getElementById("webcam");
+      const canvas = document.getElementById("output-canvas");
+      const ctx = canvas.getContext("2d");
+      const btnToggleCam = document.getElementById("btn-toggle-cam");
+      const btnCamPlaceholder = document.getElementById("btn-cam-placeholder");
+      const btnCamText = document.getElementById("btn-cam-text");
+      const camPlaceholder = document.getElementById("cam-placeholder");
+      const connStatus = document.getElementById("connection-status");
+      const alertBanner = document.getElementById("alert-banner");
+      const btnReset = document.getElementById("btn-reset");
+      const btnToggleSkeleton = document.getElementById("btn-toggle-skeleton");
+      const btnClearLogs = document.getElementById("btn-clear-logs");
+      const logContainer = document.getElementById("log-container");
+
+      // Modals & Export
+      const modalSummary = document.getElementById("modal-summary");
+      const btnEndSession = document.getElementById("btn-end-session");
+      const btnCloseSummary = document.getElementById("btn-close-summary");
+      const btnModalNewSession = document.getElementById(
+        "btn-modal-new-session",
+      );
+      const btnModalCsv = document.getElementById("btn-modal-csv");
+      const btnExportCsvQuick = document.getElementById("btn-export-csv-quick");
+
+      const modalSettings = document.getElementById("modal-settings");
+      const btnOpenSettings = document.getElementById("btn-open-settings");
+      const btnCloseSettings = document.getElementById("btn-close-settings");
+      const btnCancelSettings = document.getElementById("btn-cancel-settings");
+      const btnSaveSettings = document.getElementById("btn-save-settings");
+      const settingAlertSec = document.getElementById("setting-alert-sec");
+      const rangeConf = document.getElementById("setting-conf");
+      const txtConfVal = document.getElementById("txt-conf-val");
+      const txtAlertThresholdLabel = document.getElementById(
+        "txt-alert-threshold-label",
+      );
+
+      // Chart & Tips
+      const chartEmptyPlaceholder = document.getElementById(
+        "chart-empty-placeholder",
+      );
+      const analyticsInsightText = document.getElementById(
+        "analytics-insight-text",
+      );
+      const tipText1 = document.getElementById("tip-text-1");
+      const tipText2 = document.getElementById("tip-text-2");
+      const tipIcon2Box = document.getElementById("tip-icon-2-box");
+
+      let stream = null;
+      let ws = null;
+      let isStreaming = false;
+      let captureInterval = null;
+      let showSkeleton = true;
+      let soundEnabled = true;
+      let lastLoggedLabel = null;
+      let lastFrameTime = performance.now();
+      let lastStatsData = {};
+
+      let currentMinuteGoodFrames = 0;
+      let currentMinuteBadFrames = 0;
+      let minuteIndex = 0;
+      let hasAlertedBreak = false; // Tránh kêu chuông liên tục khi ngồi quá 45 phút
+
+      document.getElementById("analytics-date-label").innerText =
+        `Phiên ngày ${new Date().toLocaleDateString("vi-VN")}`;
+
+      // Khởi tạo Posture Analytics (Ban đầu mảng rỗng)
+      const chartCtx = document
+        .getElementById("postureAnalyticsChart")
+        .getContext("2d");
+
+      const postureChart = new Chart(chartCtx, {
+        type: "line",
+        data: {
+          labels: [],
+          datasets: [
+            {
+              label: "Ngồi đúng",
+              data: [],
+              borderColor: "#10b981",
+              backgroundColor: "rgba(16, 185, 129, 0.08)",
+              borderWidth: 2.5,
+              tension: 0.35,
+              pointRadius: 3.5,
+              pointBackgroundColor: "#10b981",
+              fill: true,
+            },
+            {
+              label: "Ngồi sai",
+              data: [],
+              borderColor: "#f43f5e",
+              backgroundColor: "rgba(244, 63, 94, 0.05)",
+              borderWidth: 2.5,
+              tension: 0.35,
+              pointRadius: 3.5,
+              pointBackgroundColor: "#f43f5e",
+              fill: true,
+            },
+          ],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          interaction: { mode: "index", intersect: false },
+          plugins: { legend: { display: false } },
+          scales: {
+            x: {
+              grid: { display: false },
+              ticks: {
+                font: { family: "Plus Jakarta Sans", weight: "bold", size: 10 },
+                color: "#64748b",
+              },
+            },
+            y: {
+              min: 0,
+              max: 100,
+              ticks: {
+                stepSize: 25,
+                callback: (v) => v + "%",
+                font: { family: "Plus Jakarta Sans", weight: "bold", size: 10 },
+                color: "#64748b",
+              },
+              grid: { color: "#f1f5f9" },
+            },
+          },
+        },
+      });
+
+      // Bộ đếm 60s tổng hợp dữ liệu vẽ vào biểu đồ
+      setInterval(() => {
+        if (!isStreaming) return;
+
+        const total = currentMinuteGoodFrames + currentMinuteBadFrames;
+        if (total > 0) {
+          minuteIndex++;
+          const goodPct = Math.round((currentMinuteGoodFrames / total) * 100);
+          const badPct = 100 - goodPct;
+
+          chartEmptyPlaceholder.classList.add("hidden");
+
+          postureChart.data.labels.push(`P${minuteIndex}`);
+          postureChart.data.datasets[0].data.push(goodPct);
+          postureChart.data.datasets[1].data.push(badPct);
+          postureChart.update();
+
+          analyticsInsightText.innerText = `Đã ghi nhận dữ liệu ${minuteIndex} phút: Tỷ lệ ngồi chuẩn đạt ${goodPct}%.`;
+
+          currentMinuteGoodFrames = 0;
+          currentMinuteBadFrames = 0;
+        }
+      }, 60000);
+
+      // Modal Summary Handlers
+      function showSessionSummary() {
+        const stats = lastStatsData || {};
+        const sec = stats.elapsed_seconds || 0;
+        const hrs = String(Math.floor(sec / 3600)).padStart(2, "0");
+        const mins = String(Math.floor((sec % 3600) / 60)).padStart(2, "0");
+        const secs = String(sec % 60).padStart(2, "0");
+        const timeStr = `${hrs}:${mins}:${secs}`;
+        const score = stats.ergonomics_score
+          ? Math.round(stats.ergonomics_score)
+          : 0;
+        const alerts = stats.alert_count || 0;
+
+        document.getElementById("modal-sum-time").innerText = timeStr;
+        document.getElementById("modal-sum-good").innerText = `${score}%`;
+        document.getElementById("modal-sum-alerts").innerText = `${alerts} lần`;
+
+        const ratingEl = document.getElementById("modal-sum-rating");
+        const adviceEl = document.getElementById("modal-sum-advice");
+        if (score >= 85) {
+          ratingEl.innerText = "Xếp loại: Rất tốt (Good)";
+          adviceEl.innerText =
+            "Bạn duy trì tư thế rất chuẩn xác trong suốt phiên làm việc. Hãy tiếp tục phát huy!";
+        } else if (score >= 70) {
+          ratingEl.innerText = "Xếp loại: Khá (Fair)";
+          adviceEl.innerText =
+            "Tư thế ở mức khá tốt. Chú ý giữ thẳng lưng hơn ở nửa sau phiên làm việc.";
+        } else {
+          ratingEl.innerText = "Xếp loại: Cần cải thiện (Poor)";
+          adviceEl.innerText =
+            "Bạn có xu hướng cúi đầu và gù lưng nhiều. Hãy nâng cao màn hình và nghỉ giải lao thường xuyên.";
+        }
+
+        modalSummary.classList.remove("hidden");
+      }
+
+      btnEndSession.addEventListener("click", () => {
+        if (isStreaming) toggleCamera();
+        showSessionSummary();
+      });
+
+      btnCloseSummary.addEventListener("click", () =>
+        modalSummary.classList.add("hidden"),
+      );
+      btnModalNewSession.addEventListener("click", () => {
+        modalSummary.classList.add("hidden");
+        resetSessionData();
+      });
+
+      function resetSessionData() {
+        fetch("/api/reset_session", { method: "POST" });
+        postureChart.data.labels = [];
+        postureChart.data.datasets[0].data = [];
+        postureChart.data.datasets[1].data = [];
+        postureChart.update();
+        minuteIndex = 0;
+        currentMinuteGoodFrames = 0;
+        currentMinuteBadFrames = 0;
+        hasAlertedBreak = false;
+        chartEmptyPlaceholder.classList.remove("hidden");
+        analyticsInsightText.innerText =
+          "Chưa có dữ liệu phiên. Hãy bật webcam để bắt đầu ghi nhận biểu đồ.";
+
+        // Reset gợi ý nghỉ
+        tipText2.innerText = "Đứng dậy vận động 2 phút sau mỗi 45 phút.";
+        tipText2.className =
+          "text-slate-700 font-semibold leading-relaxed transition-colors";
+        tipIcon2Box.className =
+          "p-1.5 rounded-lg bg-emerald-50 text-emerald-600 shrink-0 mt-0.5 border border-emerald-100 transition-colors";
+
+        appendLog(
+          "Đặt lại phiên",
+          "Toàn bộ thông số giám sát và biểu đồ đã được làm mới.",
+          "info",
+        );
+      }
+
+      btnReset.addEventListener("click", resetSessionData);
+
+      // Settings Modal Handlers
+      btnOpenSettings.addEventListener("click", () =>
+        modalSettings.classList.remove("hidden"),
+      );
+      btnCloseSettings.addEventListener("click", () =>
+        modalSettings.classList.add("hidden"),
+      );
+      btnCancelSettings.addEventListener("click", () =>
+        modalSettings.classList.add("hidden"),
+      );
+      rangeConf.addEventListener("input", (e) => {
+        txtConfVal.innerText = e.target.value;
+      });
+      btnSaveSettings.addEventListener("click", () => {
+        modalSettings.classList.add("hidden");
+        const s = settingAlertSec.value || 2;
+        txtAlertThresholdLabel.innerText = `> ${s}.0s liên tục`;
+        appendLog(
+          "Cập nhật cài đặt",
+          `Ngưỡng cảnh báo: ${s}s, Confidence: ${rangeConf.value}.`,
+          "info",
+        );
+      });
+
+      // Skeleton & Sound
+      btnToggleSkeleton.addEventListener("click", () => {
+        showSkeleton = !showSkeleton;
+        document.getElementById("btn-skeleton-text").innerText = showSkeleton
+          ? "Ẩn Khung xương"
+          : "Hiện Khung xương";
+      });
+
+      document
+        .getElementById("btn-sound-toggle")
+        .addEventListener("click", function () {
+          soundEnabled = !soundEnabled;
+          this.classList.toggle("text-rose-500", !soundEnabled);
+          this.classList.toggle("bg-rose-50", !soundEnabled);
+        });
+
+      const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      function playBeep() {
+        if (!soundEnabled) return;
+        if (audioCtx.state === "suspended") audioCtx.resume();
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.frequency.setValueAtTime(800, audioCtx.currentTime);
+        gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+        osc.start();
+        osc.stop(audioCtx.currentTime + 0.25);
+      }
+
+      async function loadModelInfo() {
+        try {
+          const res = await fetch("/api/info");
+          if (res.ok) {
+            const data = await res.json();
+            document.getElementById("info-model-label").innerText =
+              data.model_name || "SVM RBF Tuned";
+            document.getElementById("info-features-count").innerText =
+              (data.features_count || 29) + " Features";
+          }
+        } catch (e) {
+          console.error(e);
+        }
+      }
+      loadModelInfo();
+
+      function appendLog(title, desc, type = "info") {
+        const empty = document.getElementById("empty-log-msg");
+        if (empty) empty.remove();
+
+        const timeStr = new Date().toLocaleTimeString();
+        const card = document.createElement("div");
+
+        let iconBg = "bg-sky-100 text-sky-700 border-sky-300";
+        let iconName = "video";
+
+        if (type === "success") {
+          iconBg = "bg-emerald-100 text-emerald-800 border-emerald-300";
+          iconName = "check";
+        } else if (type === "warning") {
+          iconBg = "bg-rose-100 text-rose-800 border-rose-300";
+          iconName = "alert-triangle";
+        }
+
+        card.className =
+          "p-3 rounded-xl border border-slate-200 bg-slate-50/80 hover:bg-slate-100 transition flex items-start gap-3 shadow-2xs";
+        card.innerHTML = `
+          <div class="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 border ${iconBg}">
+            <i data-lucide="${iconName}" class="w-4 h-4"></i>
+          </div>
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center justify-between gap-2">
+              <h4 class="font-extrabold text-slate-900 text-xs truncate">${title}</h4>
+              <span class="text-slate-600 font-mono text-[10px] font-bold shrink-0">${timeStr}</span>
+            </div>
+            <p class="text-slate-700 font-semibold text-[11px] mt-0.5 leading-relaxed">${desc}</p>
+          </div>
+        `;
+
+        logContainer.prepend(card);
+        lucide.createIcons({ root: card });
+        while (logContainer.children.length > 25)
+          logContainer.removeChild(logContainer.lastChild);
+      }
+
+      btnClearLogs.addEventListener("click", () => {
+        logContainer.innerHTML =
+          '<div id="empty-log-msg" class="p-4 text-center text-slate-600 font-semibold text-xs bg-slate-50 rounded-xl border border-dashed border-slate-300">Nhật ký đã xóa.</div>';
+      });
+
+      function initWebSocket() {
+        const loc = window.location;
+        const wsUri =
+          (loc.protocol === "https:" ? "wss://" : "ws://") +
+          loc.host +
+          "/ws/stream";
+        ws = new WebSocket(wsUri);
+
+        ws.onopen = () => {
+          connStatus.innerHTML =
+            '<span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span><span>Hệ thống sẵn sàng</span>';
+          connStatus.className =
+            "inline-flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-bold rounded-full bg-white/95 text-emerald-800 border border-emerald-300 shadow-2xs";
+        };
+
+        ws.onclose = () => {
+          connStatus.innerHTML =
+            '<span class="w-1.5 h-1.5 rounded-full bg-slate-500"></span><span>Mất kết nối</span>';
+          connStatus.className =
+            "inline-flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-bold rounded-full bg-slate-100 text-slate-700 border border-slate-300";
+          setTimeout(initWebSocket, 2000);
+        };
+
+        ws.onmessage = (event) => {
+          const now = performance.now();
+          document.getElementById("metric-ping").innerText =
+            Math.round(now - lastFrameTime) + " ms";
+          lastFrameTime = now;
+          const data = JSON.parse(event.data);
+          updateUI(data);
+        };
+      }
+
+      async function toggleCamera() {
+        if (isStreaming) {
+          if (stream) stream.getTracks().forEach((t) => t.stop());
+          clearInterval(captureInterval);
+          isStreaming = false;
+          btnCamText.innerText = "Bật Webcam";
+          camPlaceholder.classList.remove("hidden");
+          appendLog(
+            "Đã tạm dừng webcam",
+            "Dừng theo dõi tư thế thời gian thực.",
+            "info",
+          );
+          return;
+        }
+
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({
+            video: { width: 640, height: 480 },
+          });
+          video.srcObject = stream;
+          video.play();
+          isStreaming = true;
+          btnCamText.innerText = "Tắt Webcam";
+          camPlaceholder.classList.add("hidden");
+
+          video.onloadedmetadata = () => {
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+          };
+
+          captureInterval = setInterval(sendFrame, 100);
+          appendLog(
+            "Webcam đã kết nối",
+            "Bắt đầu giám sát và nhận diện tư thế.",
+            "info",
+          );
+        } catch (err) {
+          alert("Lỗi khi mở webcam: " + err.message);
+        }
+      }
+
+      btnToggleCam.addEventListener("click", toggleCamera);
+      btnCamPlaceholder.addEventListener("click", toggleCamera);
+
+      function sendFrame() {
+        if (!isStreaming || !ws || ws.readyState !== WebSocket.OPEN) return;
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        const b64 = canvas.toDataURL("image/jpeg", 0.55);
+        ws.send(JSON.stringify({ image: b64 }));
+      }
+
+      function drawSkeleton(res) {
+        if (!showSkeleton || !res.keypoints) return;
+        const kps = res.keypoints;
+
+        if (res.bbox) {
+          const [x1, y1, x2, y2] = res.bbox;
+          ctx.strokeStyle =
+            res.smoothed_label === "correct"
+              ? "rgba(16, 185, 129, 0.9)"
+              : "rgba(239, 68, 68, 0.9)";
+          ctx.lineWidth = 2.5;
+          ctx.strokeRect(x1, y1, x2 - x1, y2 - y1);
+        }
+
+        if (kps.left_shoulder && kps.right_shoulder) {
+          ctx.beginPath();
+          ctx.moveTo(kps.left_shoulder[0], kps.left_shoulder[1]);
+          ctx.lineTo(kps.right_shoulder[0], kps.right_shoulder[1]);
+          ctx.strokeStyle = "#38bdf8";
+          ctx.lineWidth = 3.5;
+          ctx.stroke();
+        }
+
+        if (kps.left_eye && kps.right_eye) {
+          ctx.beginPath();
+          ctx.moveTo(kps.left_eye[0], kps.left_eye[1]);
+          ctx.lineTo(kps.right_eye[0], kps.right_eye[1]);
+          ctx.strokeStyle = "#c084fc";
+          ctx.lineWidth = 2.5;
+          ctx.stroke();
+        }
+
+        for (const [name, pt] of Object.entries(kps)) {
+          ctx.beginPath();
+          ctx.arc(pt[0], pt[1], 4.5, 0, 2 * Math.PI);
+          ctx.fillStyle = "#ffffff";
+          ctx.fill();
+          ctx.strokeStyle = "#4f46e5";
+          ctx.lineWidth = 2;
+          ctx.stroke();
+        }
+      }
+
+      function updateUI(res) {
+        if (isStreaming) {
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+          drawSkeleton(res);
+        }
+
+        const stats = res.stats || {};
+        lastStatsData = stats;
+        const label = res.smoothed_label;
+        const hasData = (stats.total_frames || 0) > 0;
+
+        if (isStreaming) {
+          if (label === "correct") {
+            currentMinuteGoodFrames++;
+          } else if (label !== "no_person" && label !== "evaluating") {
+            currentMinuteBadFrames++;
+          }
+        }
+
+        // 1. Điểm công thái học
+        const scoreVal = stats.ergonomics_score;
+        const scoreEl = document.getElementById("stat-score");
+        const ratingBadge = document.getElementById("badge-score-rating");
+        const scoreBar = document.getElementById("stat-score-bar");
+
+        if (!hasData || scoreVal === undefined || scoreVal === null) {
+          scoreEl.innerText = "--";
+          ratingBadge.innerText = "Chờ phiên";
+          ratingBadge.className =
+            "text-[11px] font-extrabold px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 uppercase tracking-wide border border-slate-300";
+          scoreBar.style.width = "0%";
+        } else {
+          scoreEl.innerText = Math.round(scoreVal) + "%";
+          scoreBar.style.width = scoreVal + "%";
+
+          if (scoreVal >= 85) {
+            ratingBadge.innerText = "Good";
+            ratingBadge.className =
+              "text-[11px] font-extrabold px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 uppercase tracking-wide border border-emerald-300";
+            scoreBar.className =
+              "bg-emerald-500 h-2 rounded-full transition-all duration-300";
+          } else if (scoreVal >= 70) {
+            ratingBadge.innerText = "Fair";
+            ratingBadge.className =
+              "text-[11px] font-extrabold px-2 py-0.5 rounded-md bg-blue-100 text-blue-800 uppercase tracking-wide border border-blue-300";
+            scoreBar.className =
+              "bg-blue-500 h-2 rounded-full transition-all duration-300";
+          } else {
+            ratingBadge.innerText = "Poor";
+            ratingBadge.className =
+              "text-[11px] font-extrabold px-2 py-0.5 rounded-md bg-rose-100 text-rose-800 uppercase tracking-wide border border-rose-300";
+            scoreBar.className =
+              "bg-rose-500 h-2 rounded-full transition-all duration-300";
+          }
+        }
+
+        // 2. Cảnh báo
+        const alertCount = stats.alert_count || 0;
+        const alertsText = document.getElementById("stat-alerts");
+        const alertIconBox = document.getElementById("icon-alert-box");
+        alertsText.innerText = alertCount;
+
+        if (alertCount > 0) {
+          alertsText.className =
+            "text-3xl font-extrabold text-rose-600 tracking-tight transition";
+          alertIconBox.className =
+            "w-7 h-7 rounded-lg bg-rose-100 text-rose-700 flex items-center justify-center transition";
+        } else {
+          alertsText.className =
+            "text-3xl font-extrabold text-slate-900 tracking-tight transition";
+          alertIconBox.className =
+            "w-7 h-7 rounded-lg bg-slate-100 text-slate-600 flex items-center justify-center transition";
+        }
+
+        // 3. Thời gian phiên & Logic nhắc nghỉ thông minh (Phương án 1)
+        const sec = stats.elapsed_seconds || 0;
+        const hrs = String(Math.floor(sec / 3600)).padStart(2, "0");
+        const mins = String(Math.floor((sec % 3600) / 60)).padStart(2, "0");
+        const secs = String(sec % 60).padStart(2, "0");
+        document.getElementById("stat-session-time").innerText =
+          `${hrs}:${mins}:${secs}`;
+        const correctSec = Math.round((stats.correct_frames || 0) / 10);
+        document.getElementById("stat-correct-detail").innerText = hasData
+          ? `${correctSec}s (${Math.round(scoreVal || 100)}%)`
+          : "--";
+
+        // Logic nhắc nghỉ khi ngồi liên tục >= 45 phút
+        if (sec >= 45 * 60) {
+          tipText2.innerText =
+            "⚠️ Bạn đã ngồi hơn 45 phút! Hãy đứng dậy đi lại và uống nước.";
+          tipText2.className =
+            "text-amber-700 font-extrabold leading-relaxed transition-colors";
+          tipIcon2Box.className =
+            "p-1.5 rounded-lg bg-amber-100 text-amber-700 shrink-0 mt-0.5 border border-amber-300 animate-pulse transition-colors";
+
+          if (!hasAlertedBreak) {
+            playBeep();
+            appendLog(
+              "Nhắc nhở nghỉ giải lao",
+              "Phiên làm việc đã vượt 45 phút! Hãy đứng dậy vận động 2-5 phút.",
+              "warning",
+            );
+            hasAlertedBreak = true;
+          }
+        } else {
+          const remainingMins = Math.ceil((45 * 60 - sec) / 60);
+          tipText2.innerText = `Đứng dậy vận động 2 phút sau mỗi 45 phút (còn ~${remainingMins} phút).`;
+          tipText2.className =
+            "text-slate-700 font-semibold leading-relaxed transition-colors";
+          tipIcon2Box.className =
+            "p-1.5 rounded-lg bg-emerald-50 text-emerald-600 shrink-0 mt-0.5 border border-emerald-100 transition-colors";
+        }
+
+        // 4. Badge tư thế & Gợi ý sửa lỗi tương ứng theo thời gian thực
+        const badgePosture = document.getElementById("badge-posture");
+        if (label === "correct") {
+          badgePosture.className =
+            "inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-sm font-extrabold bg-emerald-100 text-emerald-800 border border-emerald-300 shadow-2xs transition-all";
+          badgePosture.innerHTML =
+            '<span class="w-2 h-2 rounded-full bg-emerald-600 animate-pulse"></span> Tư thế Chuẩn';
+          alertBanner.classList.add("hidden");
+          tipText1.innerText =
+            "Tư thế rất tốt! Giữ vững khoảng cách mắt tới màn hình.";
+        } else if (label === "no_person") {
+          badgePosture.className =
+            "inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-sm font-extrabold bg-slate-100 text-slate-700 border border-slate-300 transition-all";
+          badgePosture.innerHTML =
+            '<span class="w-2 h-2 rounded-full bg-slate-500"></span> Không có người';
+          alertBanner.classList.add("hidden");
+          tipText1.innerText =
+            "Hãy ngồi vào khung hình để camera bắt đầu nhận diện.";
+        } else {
+          badgePosture.className =
+            "inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-sm font-extrabold bg-rose-100 text-rose-800 border border-rose-300 shadow-2xs transition-all";
+          badgePosture.innerHTML = `<span class="w-2 h-2 rounded-full bg-rose-600 animate-ping"></span> Phát hiện sai: ${label}`;
+
+          // Gợi ý thông minh chi tiết theo từng loại lỗi
+          if (
+            label.includes("cúi") ||
+            label.includes("head") ||
+            (res.angles && res.angles.head_gravity_angle > 35)
+          ) {
+            tipText1.innerText =
+              "Bạn đang cúi đầu quá thấp! Hãy nâng màn hình lên ngang tầm mắt hoặc kéo cằm về sau.";
+          } else if (
+            label.includes("nghiêng") ||
+            (res.angles && Math.abs(res.angles.shoulder_angle) > 5)
+          ) {
+            tipText1.innerText =
+              "Hai vai đang bị lệch! Thả lỏng vai và tựa đều hai cẳng tay lên mặt bàn.";
+          } else if (label.includes("gù") || label.includes("slouch")) {
+            tipText1.innerText =
+              "Bạn đang bị gù lưng! Kéo mông sát vào góc ghế và tựa lưng thẳng.";
+          } else {
+            tipText1.innerText =
+              "Phát hiện ngồi sai tư thế! Hãy ngồi thẳng lưng và điều chỉnh lại khoảng cách với bàn.";
+          }
+        }
+
+        // Cập nhật góc đo
+        if (res.angles) {
+          const sh = res.angles.shoulder_angle ?? 0;
+          const gr = res.angles.head_gravity_angle ?? 0;
+          const hb = res.angles.head_body_angle ?? 0;
+
+          document.getElementById("angle-shoulder").innerText =
+            (sh > 0 ? `+${sh}` : sh) + "°";
+          document.getElementById("angle-gravity").innerText = gr + "°";
+          document.getElementById("angle-head-body").innerText = hb + "°";
+
+          document.getElementById("bar-shoulder").style.width =
+            Math.min(100, Math.max(0, 50 + sh * 2.5)) + "%";
+          document.getElementById("bar-gravity").style.width =
+            Math.min(100, Math.max(0, (gr / 45) * 100)) + "%";
+          document.getElementById("bar-head-body").style.width =
+            Math.min(100, Math.max(0, 50 + hb * 2)) + "%";
+        }
+
+        document.getElementById("metric-prob").innerText = res.probability
+          ? Math.round(res.probability * 100) + "%"
+          : "--";
+
+        // Ghi Timeline Log
+        if (label !== lastLoggedLabel && label !== "evaluating") {
+          if (label === "correct") {
+            appendLog(
+              "Duy trì tư thế chuẩn",
+              "Ngồi thẳng lưng, vai cân bằng.",
+              "success",
+            );
+          } else if (label !== "no_person") {
+            appendLog(
+              `Phát hiện ngồi sai: ${label}`,
+              "Góc đầu/vai vượt ngưỡng cho phép.",
+              "warning",
+            );
+          }
+          lastLoggedLabel = label;
+        }
+
+        if (res.trigger_alert) {
+          alertBanner.classList.remove("hidden");
+          playBeep();
+          appendLog(
+            "Cảnh báo vi phạm",
+            "Ngồi sai tư thế liên tục > 2.0s! Vui lòng điều chỉnh lại.",
+            "warning",
+          );
+        }
+      }
+
+      // Xuất CSV
+      function exportReportCSV() {
+        const stats = lastStatsData || {};
+        const csvContent =
+          "data:text/csv;charset=utf-8," +
+          "ThoiGian,TongGiay,NgayTao,DiemCongThaiHoc,SoLanCanhBao\n" +
+          `${new Date().toLocaleTimeString()},${stats.elapsed_seconds || 0},${new Date().toLocaleDateString("vi-VN")},${stats.ergonomics_score || 0}%,${stats.alert_count || 0}`;
+        const encodedUri = encodeURI(csvContent);
+        const link = document.createElement("a");
+        link.setAttribute("href", encodedUri);
+        link.setAttribute("download", `Posture_Summary_${Date.now()}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        appendLog(
+          "Xuất báo cáo",
+          "Đã tải xuống tập tin thống kê phiên CSV.",
+          "info",
+        );
+      }
+
+      btnModalCsv.addEventListener("click", exportReportCSV);
+      btnExportCsvQuick.addEventListener("click", exportReportCSV);
+
+      initWebSocket();
+    </script>
+  </body>
+</html>
