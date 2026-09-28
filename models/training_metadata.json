@@ -2,11 +2,11 @@
   "model_name": "SVM RBF Tuned",
   "best_params": {
     "model__C": 1,
-    "model__class_weight": null,
-    "model__gamma": 0.001
+    "model__class_weight": "balanced",
+    "model__gamma": 0.01
   },
-  "cv_macro_f1_mean": 0.5948859559768567,
-  "cv_macro_f1_std": 0.1718627669086666,
+  "cv_macro_f1_mean": 0.7707440106398226,
+  "cv_macro_f1_std": 0.06603700293442502,
   "feature_columns": [
     "shoulder_angle",
     "eye_shoulder_angle",
@@ -64,37 +64,35 @@
   "n_splits": 5,
   "train_persons": [
     "person02",
-    "person03",
     "person04",
     "person05",
     "person06",
     "person07",
     "person08",
     "person09",
-    "person11",
-    "person13",
+    "person10",
     "person14"
   ],
   "test_persons": [
     "person01",
-    "person10",
-    "person12"
+    "person12",
+    "person13"
   ],
-  "train_samples": 3307,
-  "test_samples": 707,
+  "train_samples": 2900,
+  "test_samples": 655,
   "train_class_distribution": {
-    "correct": 879,
-    "forward_slouch": 757,
-    "lean_left": 828,
-    "lean_right": 843
+    "correct": 767,
+    "forward_slouch": 648,
+    "lean_left": 730,
+    "lean_right": 755
   },
   "test_class_distribution": {
-    "correct": 172,
-    "forward_slouch": 132,
-    "lean_left": 226,
-    "lean_right": 177
+    "correct": 170,
+    "forward_slouch": 141,
+    "lean_left": 188,
+    "lean_right": 156
   },
-  "dataset_sha256": "04c5d035e5c7d4836a60d39a2c9f159952d18c80171a188fdad19dc414158978",
+  "dataset_sha256": "338d3abda82d26100dcc82b93ec2605e7bc727a860bd91261d2f8b2136d27de2",
   "dataset_path": "data\\processed\\features.csv",
-  "training_timestamp": "2026-09-27T14:06:39.711828+00:00"
+  "training_timestamp": "2026-09-28T08:48:38.360171+00:00"
 }

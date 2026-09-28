@@ -7,25 +7,22 @@
   "test_person_ids_config": null,
   "train_persons": [
     "person02",
-    "person03",
     "person04",
     "person05",
     "person06",
     "person07",
     "person08",
     "person09",
-    "person11",
-    "person13",
+    "person10",
     "person14"
   ],
   "test_persons": [
     "person01",
-    "person10",
-    "person12"
+    "person12",
+    "person13"
   ],
   "train_recording_ids": [
     "person02__session01",
-    "person03__session01",
     "person04__session01",
     "person05__session01",
     "person06__session01",
@@ -34,31 +31,30 @@
     "person07__session03",
     "person08__session01",
     "person09__session02",
-    "person11__session01",
-    "person13__session01",
+    "person10__session01",
     "person14__session01"
   ],
   "test_recording_ids": [
     "person01__session01",
-    "person10__session01",
-    "person12__session02"
+    "person12__session02",
+    "person13__session01"
   ],
-  "train_samples": 3307,
-  "test_samples": 707,
+  "train_samples": 2900,
+  "test_samples": 655,
   "train_class_distribution": {
-    "correct": 879,
-    "forward_slouch": 757,
-    "lean_left": 828,
-    "lean_right": 843
+    "correct": 767,
+    "forward_slouch": 648,
+    "lean_left": 730,
+    "lean_right": 755
   },
   "test_class_distribution": {
-    "correct": 172,
-    "forward_slouch": 132,
-    "lean_left": 226,
-    "lean_right": 177
+    "correct": 170,
+    "forward_slouch": 141,
+    "lean_left": 188,
+    "lean_right": 156
   },
   "person_overlap": [],
   "recording_overlap": [],
   "dataset_path": "data\\processed\\features.csv",
-  "dataset_sha256": "04c5d035e5c7d4836a60d39a2c9f159952d18c80171a188fdad19dc414158978"
+  "dataset_sha256": "338d3abda82d26100dcc82b93ec2605e7bc727a860bd91261d2f8b2136d27de2"
 }

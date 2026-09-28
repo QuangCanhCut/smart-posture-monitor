@@ -14,3 +14,25 @@ data/raw/**
 data/processed/*.csv
 data/rejected/*.csv
 data/rejected/rejected_img/**
+
+# Ignore app folder and streamlit config
+app/
+.streamlit/
+
+# Secrets & Configurations
+.env
+.env.local
+.env.*
+
+# Virtual Environments (bổ sung)
+venv/
+env/
+
+# Logs
+*.log
+
+# Jupyter Notebook
+.ipynb_checkpoints/
+
+# OS generated files
+Thumbs.db

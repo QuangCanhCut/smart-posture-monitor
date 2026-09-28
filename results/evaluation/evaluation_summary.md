@@ -1,51 +1,51 @@
 # Smart Posture Monitor V02 - Held-out Evaluation
 
 - Model: `SVM RBF Tuned`
-- Test persons: `['person01', 'person10', 'person12']`
-- Test samples: `707`
-- Dataset SHA256: `2bc189b67d6ac75dc8a95dfb487c743b16af0f99172eebf28ce725b6c5abbb62`
+- Test persons: `['person01', 'person12', 'person13']`
+- Test samples: `655`
+- Dataset SHA256: `338d3abda82d26100dcc82b93ec2605e7bc727a860bd91261d2f8b2136d27de2`
 
 ## Overall metrics
 
-- accuracy: `0.793494`
-- balanced_accuracy: `0.788075`
-- macro_precision: `0.784227`
-- macro_recall: `0.788075`
-- macro_f1: `0.779126`
-- weighted_f1: `0.796576`
+- accuracy: `0.723664`
+- balanced_accuracy: `0.727587`
+- macro_precision: `0.752252`
+- macro_recall: `0.727587`
+- macro_f1: `0.715761`
+- weighted_f1: `0.725446`
 
 ## Training-CV reference
 
-- Selected-model CV Macro F1 mean: `0.607130`
-- Selected-model CV Macro F1 std: `0.170123`
-- Held-out minus CV Macro F1: `+0.171996`
+- Selected-model CV Macro F1 mean: `0.770744`
+- Selected-model CV Macro F1 std: `0.066037`
+- Held-out minus CV Macro F1: `-0.054983`
 
 ## Per-class metrics
 
 | class          |   precision |   recall |   f1_score |   support |
 |:---------------|------------:|---------:|-----------:|----------:|
-| correct        |    0.875    | 0.936047 |   0.904494 |       172 |
-| forward_slouch |    0.563536 | 0.772727 |   0.651757 |       132 |
-| lean_left      |    0.994924 | 0.867257 |   0.926714 |       226 |
-| lean_right     |    0.703448 | 0.576271 |   0.63354  |       177 |
+| correct        |    0.968153 | 0.894118 |   0.929664 |       170 |
+| forward_slouch |    0.532    | 0.943262 |   0.680307 |       141 |
+| lean_left      |    0.992188 | 0.675532 |   0.803797 |       188 |
+| lean_right     |    0.516667 | 0.397436 |   0.449275 |       156 |
 
 ## Per-person metrics
 
 | person_id   |   samples |   accuracy |   macro_precision |   macro_recall |   macro_f1 |   weighted_f1 |
 |:------------|----------:|-----------:|------------------:|---------------:|-----------:|--------------:|
-| person01    |       148 |   0.797297 |          0.79485  |       0.771347 |   0.667631 |      0.768973 |
-| person10    |       307 |   0.745928 |          0.783704 |       0.779371 |   0.744852 |      0.751592 |
-| person12    |       252 |   0.849206 |          0.888073 |       0.853165 |   0.851527 |      0.851693 |
+| person01    |       148 |   0.817568 |          0.819116 |       0.788183 |   0.687932 |      0.807975 |
+| person12    |       252 |   0.888889 |          0.905529 |       0.887909 |   0.888611 |      0.891337 |
+| person13    |       255 |   0.505882 |          0.598174 |       0.522388 |   0.434191 |      0.419994 |
 
 ## Confusion matrix
 
 Rows are true labels; columns are predicted labels.
 
 ```text
-[[161   2   0   9]
- [  0 102   0  30]
- [  9  17 196   4]
- [ 14  60   1 102]]
+[[152   2   0  16]
+ [  0 133   0   8]
+ [  0  27 127  34]
+ [  5  88   1  62]]
 ```
 
 ## Protocol
