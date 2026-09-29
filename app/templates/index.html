@@ -961,6 +961,17 @@
       let lastFrameTime = performance.now();
       let lastStatsData = {};
 
+      // Bộ đếm thời gian phiên cục bộ mượt mà
+      let localSessionSeconds = 0;
+      let sessionClockInterval = null;
+
+      function formatTime(sec) {
+        const hrs = String(Math.floor(sec / 3600)).padStart(2, "0");
+        const mins = String(Math.floor((sec % 3600) / 60)).padStart(2, "0");
+        const secs = String(sec % 60).padStart(2, "0");
+        return `${hrs}:${mins}:${secs}`;
+      }
+
       let currentMinuteGoodFrames = 0;
       let currentMinuteBadFrames = 0;
       let minuteIndex = 0;
@@ -1058,11 +1069,7 @@
       // Modal Summary Handlers
       function showSessionSummary() {
         const stats = lastStatsData || {};
-        const sec = stats.elapsed_seconds || 0;
-        const hrs = String(Math.floor(sec / 3600)).padStart(2, "0");
-        const mins = String(Math.floor((sec % 3600) / 60)).padStart(2, "0");
-        const secs = String(sec % 60).padStart(2, "0");
-        const timeStr = `${hrs}:${mins}:${secs}`;
+        const timeStr = formatTime(localSessionSeconds);
         const score = stats.ergonomics_score
           ? Math.round(stats.ergonomics_score)
           : 0;
@@ -1105,7 +1112,11 @@
       });
 
       function resetSessionData() {
+        // 1. Gửi yêu cầu reset lên server
         fetch("/api/reset_session", { method: "POST" });
+
+        // 2. Xóa sạch biến tạm & biểu đồ
+        lastStatsData = {};
         postureChart.data.labels = [];
         postureChart.data.datasets[0].data = [];
         postureChart.data.datasets[1].data = [];
@@ -1118,7 +1129,27 @@
         analyticsInsightText.innerText =
           "Chưa có dữ liệu phiên. Hãy bật webcam để bắt đầu ghi nhận biểu đồ.";
 
-        // Reset gợi ý nghỉ
+        // 3. Đưa tất cả các thẻ chỉ số trên giao diện về trạng thái ban đầu
+        localSessionSeconds = 0;
+        document.getElementById("stat-session-time").innerText = "00:00:00";
+        document.getElementById("stat-correct-detail").innerText = "--";
+
+        document.getElementById("stat-score").innerText = "--";
+        document.getElementById("stat-score-bar").style.width = "0%";
+        const scoreBadge = document.getElementById("badge-score-rating");
+        scoreBadge.innerText = "Chờ phiên";
+        scoreBadge.className =
+          "text-[11px] font-extrabold px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 uppercase tracking-wide border border-slate-300";
+
+        document.getElementById("stat-alerts").innerText = "0";
+        document.getElementById("stat-alerts").className =
+          "text-3xl font-extrabold text-slate-900 tracking-tight transition";
+        document.getElementById("icon-alert-box").className =
+          "w-7 h-7 rounded-lg bg-slate-100 text-slate-600 flex items-center justify-center transition";
+
+        alertBanner.classList.add("hidden");
+
+        // 4. Reset thẻ gợi ý nghỉ
         tipText2.innerText = "Đứng dậy vận động 2 phút sau mỗi 45 phút.";
         tipText2.className =
           "text-slate-700 font-semibold leading-relaxed transition-colors";
@@ -1272,6 +1303,9 @@
         };
 
         ws.onmessage = (event) => {
+          // CHẶN CẬP NHẬT KHI ĐÃ TẮT CAMERA: Ngăn frame tồn đọng làm tăng cảnh báo
+          if (!isStreaming) return;
+
           const now = performance.now();
           document.getElementById("metric-ping").innerText =
             Math.round(now - lastFrameTime) + " ms";
@@ -1283,11 +1317,23 @@
 
       async function toggleCamera() {
         if (isStreaming) {
-          if (stream) stream.getTracks().forEach((t) => t.stop());
-          clearInterval(captureInterval);
+          if (stream) {
+            stream.getTracks().forEach((t) => t.stop());
+            stream = null;
+          }
+          if (captureInterval) {
+            clearInterval(captureInterval);
+            captureInterval = null;
+          }
+          if (sessionClockInterval) {
+            clearInterval(sessionClockInterval);
+            sessionClockInterval = null;
+          }
           isStreaming = false;
           btnCamText.innerText = "Bật Webcam";
           camPlaceholder.classList.remove("hidden");
+          alertBanner.classList.add("hidden");
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
           appendLog(
             "Đã tạm dừng webcam",
             "Dừng theo dõi tư thế thời gian thực.",
@@ -1312,6 +1358,16 @@
           };
 
           captureInterval = setInterval(sendFrame, 100);
+
+          // Bắt đầu đếm giây cục bộ chính xác mỗi 1 giây
+          if (!sessionClockInterval) {
+            sessionClockInterval = setInterval(() => {
+              localSessionSeconds++;
+              document.getElementById("stat-session-time").innerText =
+                formatTime(localSessionSeconds);
+            }, 1000);
+          }
+
           appendLog(
             "Webcam đã kết nối",
             "Bắt đầu giám sát và nhận diện tư thế.",
@@ -1449,20 +1505,14 @@
             "w-7 h-7 rounded-lg bg-slate-100 text-slate-600 flex items-center justify-center transition";
         }
 
-        // 3. Thời gian phiên & Logic nhắc nghỉ thông minh (Phương án 1)
-        const sec = stats.elapsed_seconds || 0;
-        const hrs = String(Math.floor(sec / 3600)).padStart(2, "0");
-        const mins = String(Math.floor((sec % 3600) / 60)).padStart(2, "0");
-        const secs = String(sec % 60).padStart(2, "0");
-        document.getElementById("stat-session-time").innerText =
-          `${hrs}:${mins}:${secs}`;
+        // 3. Thời gian phiên & Chi tiết đúng chuẩn
         const correctSec = Math.round((stats.correct_frames || 0) / 10);
         document.getElementById("stat-correct-detail").innerText = hasData
           ? `${correctSec}s (${Math.round(scoreVal || 100)}%)`
           : "--";
 
-        // Logic nhắc nghỉ khi ngồi liên tục >= 45 phút
-        if (sec >= 45 * 60) {
+        // Logic nhắc nghỉ khi ngồi liên tục >= 45 phút (dựa theo localSessionSeconds)
+        if (localSessionSeconds >= 45 * 60) {
           tipText2.innerText =
             "⚠️ Bạn đã ngồi hơn 45 phút! Hãy đứng dậy đi lại và uống nước.";
           tipText2.className =
@@ -1480,7 +1530,7 @@
             hasAlertedBreak = true;
           }
         } else {
-          const remainingMins = Math.ceil((45 * 60 - sec) / 60);
+          const remainingMins = Math.ceil((45 * 60 - localSessionSeconds) / 60);
           tipText2.innerText = `Đứng dậy vận động 2 phút sau mỗi 45 phút (còn ~${remainingMins} phút).`;
           tipText2.className =
             "text-slate-700 font-semibold leading-relaxed transition-colors";
@@ -1592,7 +1642,7 @@
         const csvContent =
           "data:text/csv;charset=utf-8," +
           "ThoiGian,TongGiay,NgayTao,DiemCongThaiHoc,SoLanCanhBao\n" +
-          `${new Date().toLocaleTimeString()},${stats.elapsed_seconds || 0},${new Date().toLocaleDateString("vi-VN")},${stats.ergonomics_score || 0}%,${stats.alert_count || 0}`;
+          `${new Date().toLocaleTimeString()},${localSessionSeconds},${new Date().toLocaleDateString("vi-VN")},${stats.ergonomics_score || 0}%,${stats.alert_count || 0}`;
         const encodedUri = encodeURI(csvContent);
         const link = document.createElement("a");
         link.setAttribute("href", encodedUri);
