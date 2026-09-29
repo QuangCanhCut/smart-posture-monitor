@@ -1,0 +1,164 @@
+{
+  "feature_mode": "delta",
+  "calibration_samples": 30,
+  "minimum_calibration_samples": 10,
+  "calibration_statistic": "median",
+  "baseline_scope": "session",
+  "sort_column": "image_path",
+  "calibration_rows_excluded_from_training_and_evaluation": true,
+  "stats": {
+    "original_samples": 4014,
+    "original_persons": 14,
+    "original_sessions": 3,
+    "original_recordings": 16,
+    "transformed_samples": 3534,
+    "calibration_samples_removed": 480,
+    "skipped_sessions": [],
+    "per_recording": [
+      {
+        "recording_id": "person01__session01",
+        "person_id": "person01",
+        "session_id": "session01",
+        "correct_samples": 49,
+        "calibration_samples": 30,
+        "usable_samples": 118,
+        "skipped": false
+      },
+      {
+        "recording_id": "person02__session01",
+        "person_id": "person02",
+        "session_id": "session01",
+        "correct_samples": 79,
+        "calibration_samples": 30,
+        "usable_samples": 247,
+        "skipped": false
+      },
+      {
+        "recording_id": "person03__session01",
+        "person_id": "person03",
+        "session_id": "session01",
+        "correct_samples": 57,
+        "calibration_samples": 30,
+        "usable_samples": 171,
+        "skipped": false
+      },
+      {
+        "recording_id": "person04__session01",
+        "person_id": "person04",
+        "session_id": "session01",
+        "correct_samples": 63,
+        "calibration_samples": 30,
+        "usable_samples": 245,
+        "skipped": false
+      },
+      {
+        "recording_id": "person05__session01",
+        "person_id": "person05",
+        "session_id": "session01",
+        "correct_samples": 73,
+        "calibration_samples": 30,
+        "usable_samples": 230,
+        "skipped": false
+      },
+      {
+        "recording_id": "person06__session01",
+        "person_id": "person06",
+        "session_id": "session01",
+        "correct_samples": 67,
+        "calibration_samples": 30,
+        "usable_samples": 210,
+        "skipped": false
+      },
+      {
+        "recording_id": "person07__session01",
+        "person_id": "person07",
+        "session_id": "session01",
+        "correct_samples": 85,
+        "calibration_samples": 30,
+        "usable_samples": 267,
+        "skipped": false
+      },
+      {
+        "recording_id": "person07__session02",
+        "person_id": "person07",
+        "session_id": "session02",
+        "correct_samples": 68,
+        "calibration_samples": 30,
+        "usable_samples": 228,
+        "skipped": false
+      },
+      {
+        "recording_id": "person07__session03",
+        "person_id": "person07",
+        "session_id": "session03",
+        "correct_samples": 58,
+        "calibration_samples": 30,
+        "usable_samples": 211,
+        "skipped": false
+      },
+      {
+        "recording_id": "person08__session01",
+        "person_id": "person08",
+        "session_id": "session01",
+        "correct_samples": 67,
+        "calibration_samples": 30,
+        "usable_samples": 196,
+        "skipped": false
+      },
+      {
+        "recording_id": "person09__session01",
+        "person_id": "person09",
+        "session_id": "session01",
+        "correct_samples": 84,
+        "calibration_samples": 30,
+        "usable_samples": 243,
+        "skipped": false
+      },
+      {
+        "recording_id": "person10__session01",
+        "person_id": "person10",
+        "session_id": "session01",
+        "correct_samples": 62,
+        "calibration_samples": 30,
+        "usable_samples": 277,
+        "skipped": false
+      },
+      {
+        "recording_id": "person11__session01",
+        "person_id": "person11",
+        "session_id": "session01",
+        "correct_samples": 57,
+        "calibration_samples": 30,
+        "usable_samples": 228,
+        "skipped": false
+      },
+      {
+        "recording_id": "person12__session01",
+        "person_id": "person12",
+        "session_id": "session01",
+        "correct_samples": 61,
+        "calibration_samples": 30,
+        "usable_samples": 222,
+        "skipped": false
+      },
+      {
+        "recording_id": "person13__session01",
+        "person_id": "person13",
+        "session_id": "session01",
+        "correct_samples": 60,
+        "calibration_samples": 30,
+        "usable_samples": 225,
+        "skipped": false
+      },
+      {
+        "recording_id": "person14__session01",
+        "person_id": "person14",
+        "session_id": "session01",
+        "correct_samples": 61,
+        "calibration_samples": 30,
+        "usable_samples": 216,
+        "skipped": false
+      }
+    ]
+  }
+}

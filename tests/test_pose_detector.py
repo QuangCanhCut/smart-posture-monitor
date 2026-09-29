@@ -1,3 +1,13 @@
+import sys
+
+if "pytest" in sys.modules:
+    import pytest
+
+    pytest.skip(
+        "Webcam integration script; run directly with python when a camera is available.",
+        allow_module_level=True,
+    )
+
 import cv2
 
 from src.pose_detector import PoseDetector
