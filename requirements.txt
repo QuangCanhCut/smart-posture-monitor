@@ -9,3 +9,6 @@ joblib
 ipykernel
 pytest
 tabulate
+imbalanced-learn
+nbformat
+nbclient

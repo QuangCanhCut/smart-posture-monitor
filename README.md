@@ -1,131 +1,80 @@
 # Smart Posture Monitor
 
-Smart Posture Monitor là project Python dùng để nhận diện tư thế ngồi từ ảnh hoặc webcam.
+Smart Posture Monitor là project nhận diện tư thế ngồi từ ảnh hoặc webcam bằng YOLO Pose, feature hình học thủ công, Personal Baseline Delta và mô hình Machine Learning cổ điển.
 
-Pipeline V02 hiện tại:
+Phiên bản hiện tại là **V03**. Điểm thay đổi chính so với pipeline raw-feature trước đây là model không học trực tiếp trên 29 đặc trưng tuyệt đối nữa, mà học trên độ lệch so với baseline cá nhân của từng người dùng/session.
 
-```text
-YOLO Pose -> keypoints phần thân trên -> 29 engineered features
--> mô hình Machine Learning -> dự đoán tư thế
-```
+## Overview
 
-Project hiện không còn ở giai đoạn prototype ban đầu chỉ có PoseDetector + FeatureExtractor. V02 đã có pipeline build dataset, preprocessing, EDA, training experiments, chọn model, official held-out evaluation và prototype realtime webcam inference.
-
-## 1. Các tư thế hỗ trợ
-
-| Label | Ý nghĩa |
-|---|---|
-| `correct` | Tư thế ngồi tương đối đúng/upright. |
-| `forward_slouch` | Cúi hoặc gù người về phía trước. |
-| `lean_left` | Nghiêng người/đầu sang trái. |
-| `lean_right` | Nghiêng người/đầu sang phải. |
-
-## 2. Pipeline hệ thống
-
-Pipeline offline để build dataset và train model:
-
-```text
-Raw images
--> PoseDetector
--> 6 keypoints
--> FeatureExtractor
--> 29 engineered features
--> DatasetBuilder
--> data/processed/features.csv
--> preprocessing / person-based split
--> group-based CV training
--> models/best_model.joblib
-```
-
-Pipeline realtime inference:
+Pipeline realtime V03:
 
 ```text
 Webcam frame
 -> PoseDetector
--> 6 keypoints
+-> 6 upper-body keypoints
 -> FeatureExtractor
--> 29 engineered features
--> best_model.joblib
--> posture prediction
--> realtime display / tích hợp app sau này
+-> 29 RAW engineered features
+-> PersonalCalibration
+-> 29 DELTA features
+-> PosturePredictor
+-> XGBoost
+-> frame-level posture prediction
 ```
 
-## 3. Cấu trúc project
+Pipeline offline training:
 
 ```text
-smart_posture_monitor/
-|-- app/
-|   `-- app.py                         # Placeholder cho application
-|-- data/                              # Dataset/runtime data local, đang bị ignore bởi Git
-|   |-- raw/
-|   |-- processed/
-|   `-- rejected/
-|-- docs/                              # Báo cáo tiến độ và ghi chú thiết kế
-|-- models/
-|   |-- best_model.joblib              # Classifier V02 đã train
-|   |-- split_manifest.json            # Locked train/test person split
-|   |-- training_metadata.json         # Metadata model và feature schema
-|   `-- yolo26n-pose.pt                # YOLO pose model local, đang bị ignore bởi Git
-|-- notebooks/
-|   |-- 01_eda_dataset.ipynb
-|   `-- 02_training_experiments.ipynb
-|-- results/
-|   |-- baseline_cv_results.csv
-|   |-- model_selection_results.csv
-|   |-- svm_search_results.csv
-|   |-- xgboost_search_results.csv
-|   `-- evaluation/
-|-- scripts/
-|   |-- copy_rejected_images.py
-|   `-- test_webcam_model.py
-|-- src/
-|   |-- pose_detector.py
-|   |-- feature_extractor.py
-|   |-- dataset_builder.py
-|   |-- preprocessing.py
-|   |-- evaluate.py
-|   |-- inference.py                   # Placeholder
-|   |-- train.py                       # Placeholder
-|   |-- posture_predictor.py           # Placeholder
-|   |-- temporal_monitor.py            # Placeholder
-|   `-- session_statistics.py          # Placeholder
-|-- tests/
-|   |-- test_preprocessing.py
-|   |-- test_pose_detector.py
-|   `-- test_feature_extractor.py
-|-- requirements.txt
-`-- README.md
+data/processed/features.csv
+-> prepare_dataset()
+-> person-based holdout split
+-> Personal Baseline Delta per recording_id
+-> train final XGBoost
+-> models/best_model.joblib
 ```
 
-## 4. Pose Detection
-
-`src/pose_detector.py` dùng Ultralytics YOLO Pose với model local:
+## Current Version
 
 ```text
-models/yolo26n-pose.pt
+V03 - Personal Baseline Delta
 ```
 
-Cấu hình mặc định của detector:
+V03 giải quyết một phần khác biệt hình thể, vị trí camera và setup giữa các người dùng bằng cách chuẩn hóa mỗi sample theo baseline correct của chính recording đó.
 
-- `person_conf_threshold = 0.5`
-- Nếu phát hiện nhiều người, hệ thống chọn person theo score:
-  - `0.7 * centrality_score`
-  - `0.3 * confidence_score`
-- Chỉ trả về 6 keypoints phần thân trên:
-  - `nose`
-  - `left_eye`
-  - `right_eye`
-  - `left_ear`
-  - `left_shoulder`
-  - `right_shoulder`
+## Supported Postures
 
-Keypoint `right_ear` hiện không dùng trong feature pipeline V02.
+| Label | Ý nghĩa |
+|---|---|
+| `correct` | Tư thế ngồi đúng/upright tương đối. |
+| `forward_slouch` | Cúi hoặc gù người về phía trước. |
+| `lean_left` | Nghiêng người/đầu sang trái. |
+| `lean_right` | Nghiêng người/đầu sang phải. |
 
-## 5. Feature Engineering
+## Camera Protocol
 
-`src/feature_extractor.py` chuyển 6 keypoints thành vector cố định gồm 29 engineered features.
+Dataset và realtime test hiện chủ yếu theo protocol:
 
-Danh sách feature hiện tại được định nghĩa tại:
+```text
+camera đặt khoảng 45 độ từ bên trái người dùng
+```
+
+Webcam test **không mirror frame**, vì mirror có thể đảo nghĩa `lean_left` và `lean_right`.
+
+## Pose Keypoints
+
+`src/pose_detector.py` dùng Ultralytics YOLO Pose và chỉ truyền 6 keypoints phần thân trên vào feature pipeline:
+
+- `nose`
+- `left_eye`
+- `right_eye`
+- `left_ear`
+- `left_shoulder`
+- `right_shoulder`
+
+Nếu phát hiện nhiều người, detector chọn người phù hợp dựa trên điểm kết hợp giữa vị trí gần trung tâm và confidence.
+
+## Feature Engineering
+
+`src/feature_extractor.py` chuyển pose result thành vector 29 chiều. Danh sách chính thức nằm trong:
 
 ```python
 FeatureExtractor.FEATURE_NAMES
@@ -134,415 +83,315 @@ FeatureExtractor.FEATURE_NAMES
 Các nhóm feature chính:
 
 - góc vai và góc đường mắt;
-- tọa độ head/eye/nose/ear đã chuẩn hóa theo body frame;
-- các tỉ lệ khoảng cách và độ bất đối xứng;
-- các proxy về góc head/body/gravity;
+- tọa độ nose/eye/ear trong body frame;
+- tỉ lệ khoảng cách đã chuẩn hóa theo shoulder width;
+- độ bất đối xứng giữa hai vai;
+- các proxy về head/body/gravity angle;
 - offset so với trục dọc;
-- mean/spread của chiều cao head landmarks và độ phân tán góc.
+- thống kê height/spread của head landmarks.
 
-FeatureExtractor kiểm tra confidence keypoint với ngưỡng:
+FeatureExtractor chỉ tạo **RAW[29]**. Nó không calibration và không predict.
 
-```text
-min_keypoint_confidence = 0.35
-```
+## Personal Baseline Delta
 
-Nếu thiếu keypoint, keypoint confidence thấp, giá trị không finite, hoặc geometry không hợp lệ, frame sẽ bị reject bằng cách trả về `None`.
-
-Tài liệu chi tiết hơn nằm ở [docs/feature_v2_29_features_2026-09-25.md](docs/feature_v2_29_features_2026-09-25.md).
-
-## 6. Dataset V02
-
-Các số liệu Dataset V02 dưới đây được xác nhận từ dataset local, notebook EDA, preprocessing và model metadata hiện tại.
-
-| Hạng mục | Giá trị |
-|---|---:|
-| Raw images | 4341 |
-| Valid samples | 4014 |
-| Rejected samples | 327 |
-| Persons | 14 |
-| Person-session recordings | 16 |
-| Classes | 4 |
-| Engineered features | 29 |
-
-Phân bố class:
-
-| Class | Samples |
-|---|---:|
-| `correct` | 1051 |
-| `forward_slouch` | 889 |
-| `lean_left` | 1054 |
-| `lean_right` | 1020 |
-
-Cấu trúc raw dataset mà `DatasetBuilder` yêu cầu:
+V03 dùng calibration cá nhân:
 
 ```text
-data/raw/<label>/<person_id>_<session_id>/<image>
+K = 30 correct samples
+baseline = median(correct_samples, axis=0)
+delta = raw - baseline
 ```
 
-Các output local được sinh ra:
+Số chiều không đổi:
 
 ```text
-data/processed/features.csv
-data/rejected/rejected_images.csv
-data/rejected/rejected_img/
+29 RAW features -> 29 DELTA features
 ```
 
-Thư mục `data/` là dataset/runtime data local và đang được ignore bởi Git.
+Trong realtime, user cần ngồi ở tư thế correct tự nhiên lúc bắt đầu session để hệ thống thu 30 vector RAW hợp lệ. Baseline chỉ reset khi user chủ động recalibrate.
 
-## 7. Chuẩn bị dữ liệu
+Trong training/evaluation offline, baseline được tạo theo `recording_id`, không theo `session_id`, vì `session_id` có thể trùng giữa nhiều person.
 
-### DatasetBuilder
+## Model
 
-`src/dataset_builder.py` build file feature CSV theo luồng:
+Final model V03:
 
 ```text
-raw images
--> PoseDetector
--> FeatureExtractor
--> 29 features
--> data/processed/features.csv
+Representation: Personal Baseline Delta
+Classifier: XGBoost Tuned
+Imbalance strategy: none
 ```
 
-Các ảnh bị reject được ghi lại kèm reason/detail tại:
+Best hyperparameters:
 
 ```text
-data/rejected/rejected_images.csv
+n_estimators=200
+max_depth=6
+learning_rate=0.02
+subsample=1.0
+colsample_bytree=1.0
+min_child_weight=1
+gamma=0
+reg_alpha=0
+reg_lambda=5
 ```
 
-### Preprocessing
-
-`src/preprocessing.py` chuẩn bị dữ liệu cho model:
+Reference result từ Group/person-based CV trong notebook experiment:
 
 ```text
-features.csv
--> load_dataset()
--> get_feature_columns()
--> validate_schema()
--> validate_integrity()
--> add_recording_id()
--> filter_protocol_invalid()
--> prepare_model_data()
--> X, y, groups, metadata
+CV Macro F1 = 0.688936 +/- 0.140001
 ```
 
-Các điểm quan trọng:
+Đây là kết quả cross-validation theo person trên training persons, không phải realtime accuracy.
 
-- `X` chỉ chứa đúng 29 engineered features.
-- `y` dùng mapping label:
-  - `correct -> 0`
-  - `forward_slouch -> 1`
-  - `lean_left -> 2`
-  - `lean_right -> 3`
-- `groups = person_id` để phục vụ group-based validation và tránh leakage.
-- `recording_id = person_id + "__" + session_id`.
-- Metadata không được đưa vào feature matrix để train model.
-
-Preprocessing không thực hiện global scaling, PCA, SMOTE, random frame split, IQR outlier removal hoặc drop feature chỉ vì correlation cao.
-
-## 8. Exploratory Data Analysis
-
-Notebook:
-
-[notebooks/01_eda_dataset.ipynb](notebooks/01_eda_dataset.ipynb)
-
-Tóm tắt EDA hiện tại:
-
-- Dataset có `4014` valid samples, `14` persons, `16` person-session recordings và `4` classes.
-- Class distribution tương đối cân bằng; tỉ lệ max/min khoảng `1.19x`.
-- `person07` có nhiều samples hơn do có 3 sessions.
-- Không phát hiện duplicate rows, missing values, NaN hoặc Inf trong feature matrix.
-- Có outlier theo IQR ở một số feature, nhưng notebook chỉ thống kê, không xóa/cắt sample.
-- Correlation analysis tìm thấy `22` feature pairs có `abs_corr >= 0.90`, gợi ý có redundancy cần theo dõi.
-- PCA trên 29 scaled features cần 4 components để đạt ít nhất 90% variance và 6 components để đạt ít nhất 95% variance.
-- Có subject-to-subject variation, vì vậy khi đánh giá model cần split theo group `person_id`.
-
-EDA không train model và không kết luận model tốt/xấu.
-
-## 9. Model Training
-
-Notebook:
-
-[notebooks/02_training_experiments.ipynb](notebooks/02_training_experiments.ipynb)
-
-Training protocol:
-
-- Load dataset qua `src.preprocessing.prepare_dataset()`.
-- Split holdout theo `person_id`.
-- Lock unseen test persons trước khi chọn model.
-- Chạy `StratifiedGroupKFold` chỉ trên training persons.
-- Dùng Macro F1 làm metric chính để chọn model.
-- Không dùng held-out test set để chọn model.
-
-Baseline models đã thử:
-
-- `DummyClassifier`
-- `LogisticRegression`
-- `SVM RBF`
-- `RandomForest`
-- `ExtraTrees`
-- `XGBoost`
-
-Models đã tune:
-
-- SVM RBF bằng `GridSearchCV`
-- XGBoost bằng `RandomizedSearchCV`
-
-Model cuối được chọn:
+Official held-out evaluation hiện tại được chạy riêng bằng `src.evaluate` trên locked unseen-person holdout:
 
 ```text
-SVM RBF Tuned
+Test persons: person01, person10, person12
+Test samples sau calibration removal: 617
+Macro F1: 0.644193
+Accuracy: 0.632091
+Balanced accuracy: 0.702947
 ```
 
-Training artifacts:
+Holdout test không được dùng để tune hoặc chọn model.
 
-- [models/best_model.joblib](models/best_model.joblib)
-- [models/split_manifest.json](models/split_manifest.json)
-- [models/training_metadata.json](models/training_metadata.json)
+## Imbalance Experiment
 
-## 10. Kết quả model
+Sau khi calibration loại 30 correct samples mỗi recording, class `correct` giảm đáng kể. Notebook đã benchmark imbalance strategy trên cùng representation V03:
 
-Training-CV reference từ `models/training_metadata.json`:
+| Strategy | Model | CV Macro F1 | Std |
+|---|---|---:|---:|
+| `none` | SVM RBF | 0.663675 | 0.186527 |
+| `class_weight` | SVM RBF | 0.661674 | 0.178407 |
+| `smote` | SVM RBF | 0.661379 | 0.172660 |
+| `random_over` | SVM RBF | 0.657347 | 0.173149 |
 
-| Metric | Value |
-|---|---:|
-| Cross-validation Macro F1 mean | 0.607130 |
-| Cross-validation Macro F1 std | 0.170123 |
+Kết luận cho experiment hiện tại: không có bằng chứng cho thấy balancing cải thiện CV Macro F1, nên final training dùng `none`. Điều này không có nghĩa SMOTE luôn xấu; chỉ là trong thí nghiệm hiện tại nó không cải thiện representation V03.
 
-Đây là mean validation Macro F1 từ group-based cross-validation trên training subjects. Đây không phải độ chính xác trên tập train.
-
-Official held-out evaluation từ `results/evaluation/test_metrics.json`:
-
-| Metric | Value |
-|---|---:|
-| Accuracy | 0.793494 |
-| Balanced accuracy | 0.788075 |
-| Macro precision | 0.784227 |
-| Macro recall | 0.788075 |
-| Macro F1 | 0.779126 |
-| Weighted F1 | 0.796576 |
-
-Held-out test set:
-
-| Hạng mục | Giá trị |
-|---|---:|
-| Unseen test persons | 3 |
-| Test samples | 707 |
-| Test recordings | 3 |
-
-Locked unseen test persons:
+## Project Structure
 
 ```text
-person01, person10, person12
+smart_posture_monitor/
+|-- app/
+|   `-- app.py
+|-- data/                         # Dataset/runtime data local, ignored by Git
+|-- docs/                         # Báo cáo kỹ thuật và ghi chú tiến độ
+|-- models/
+|   |-- best_model.joblib          # Final classifier artifact nếu được tracking/local
+|   |-- calibration_config.json
+|   |-- split_manifest.json
+|   |-- training_metadata.json
+|   `-- yolo26n-pose.pt            # YOLO pose model local, ignored by Git
+|-- notebooks/
+|   |-- 01_eda_dataset.ipynb
+|   `-- 02_training_experiments.ipynb
+|-- results/
+|   |-- calibration_audit.csv
+|   `-- evaluation/
+|-- scripts/
+|   |-- copy_rejected_images.py
+|   `-- test_webcam_model.py
+|-- src/
+|   |-- dataset_builder.py
+|   |-- evaluate.py
+|   |-- feature_extractor.py
+|   |-- inference.py
+|   |-- personal_calibration.py
+|   |-- pose_detector.py
+|   |-- posture_predictor.py
+|   |-- preprocessing.py
+|   |-- session_statistics.py
+|   |-- temporal_monitor.py
+|   `-- train.py
+|-- tests/
+|-- requirements.txt
+`-- README.md
 ```
 
-Held-out unseen-person Macro F1 là kết quả evaluation riêng trên locked test persons. Metric này không được dùng để tune model.
+## Installation
 
-## 11. Per-class Performance
+Tạo virtual environment trên Windows:
 
-Từ `results/evaluation/classification_report.csv`:
-
-| Class | Precision | Recall | F1 | Support |
-|---|---:|---:|---:|---:|
-| `correct` | 0.875 | 0.936 | 0.904 | 172 |
-| `forward_slouch` | 0.564 | 0.773 | 0.652 | 132 |
-| `lean_left` | 0.995 | 0.867 | 0.927 | 226 |
-| `lean_right` | 0.703 | 0.576 | 0.634 | 177 |
-
-Confusion matrix từ `results/evaluation/confusion_matrix.csv`:
-
-```text
-                correct  forward_slouch  lean_left  lean_right
-correct             161               2          0           9
-forward_slouch        0             102          0          30
-lean_left             9              17        196           4
-lean_right           14              60          1         102
-```
-
-Nhận xét hiện tại:
-
-- `correct` và `lean_left` là hai class mạnh hơn trong held-out test hiện tại.
-- Confusion đáng chú ý nhất nằm giữa `forward_slouch` và `lean_right`.
-- `lean_right` thường bị predict thành `forward_slouch`.
-
-## 12. Realtime Webcam Inference
-
-Script:
-
-[scripts/test_webcam_model.py](scripts/test_webcam_model.py)
-
-Chạy từ project root:
-
-```bash
-python scripts/test_webcam_model.py
-```
-
-Các argument hỗ trợ:
-
-```bash
-python scripts/test_webcam_model.py --camera 0
-python scripts/test_webcam_model.py --no-pose
-```
-
-Script load:
-
-```text
-models/best_model.joblib
-models/training_metadata.json
-```
-
-và predict ở mức frame-level:
-
-```text
-Webcam
--> PoseDetector
--> FeatureExtractor
--> trained model
--> realtime posture label
-```
-
-Trạng thái hiện tại:
-
-- Đây là prototype/integration test cho realtime inference.
-- Có vẽ bbox/keypoints, trừ khi truyền `--no-pose`.
-- Chưa có temporal smoothing.
-- Chưa refactor qua `PosturePredictor`.
-
-## 13. Official Evaluation
-
-Script:
-
-[src/evaluate.py](src/evaluate.py)
-
-Chạy:
-
-```bash
-python -m src.evaluate
-```
-
-Evaluation script thực hiện:
-
-- load `features.csv`, `best_model.joblib`, `split_manifest.json` và `training_metadata.json`;
-- verify dataset SHA256;
-- dùng `prepare_dataset()`;
-- reconstruct locked unseen-person test set;
-- chạy `model.predict()`;
-- ghi metrics, predictions, confusion matrices, per-person metrics và plots.
-
-Script này không:
-
-- retrain;
-- tune;
-- tạo split mới;
-- chọn model lại.
-
-Output được lưu trong:
-
-[results/evaluation/](results/evaluation/)
-
-## 14. Cài đặt môi trường
-
-Tạo và activate virtual environment trên Windows:
-
-```bash
+```powershell
 python -m venv .venv
-.venv\Scripts\activate
-```
-
-Cài dependencies:
-
-```bash
+.\.venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-Dependencies hiện tại trong [requirements.txt](requirements.txt):
-
-- `ultralytics`
-- `opencv-python`
-- `numpy`
-- `pandas`
-- `scikit-learn`
-- `matplotlib`
-- `xgboost`
-- `joblib`
-- `ipykernel`
-- `pytest`
-- `tabulate`
-
-YOLO pose model cần có local tại:
+YOLO pose weight cần có local:
 
 ```text
 models/yolo26n-pose.pt
 ```
 
-File `.pt` đang được ignore bởi Git.
+File `.pt`, dataset trong `data/`, cache và `.venv` được ignore theo `.gitignore`.
 
-## 15. Các lệnh chính
+## Training
 
-| Nhiệm vụ | Command |
-|---|---|
-| Build dataset | `python -m src.dataset_builder` |
-| Validate preprocessing | `python -m src.preprocessing` |
-| Chạy preprocessing tests | `python -m pytest tests/test_preprocessing.py -v` |
-| Chạy realtime webcam prototype | `python scripts/test_webcam_model.py` |
-| Chạy official held-out evaluation | `python -m src.evaluate` |
+Chạy final production training:
 
-Các script webcam/debug thủ công:
-
-```bash
-python -m tests.test_pose_detector
-python -m tests.test_feature_extractor
-python scripts/copy_rejected_images.py
+```powershell
+python -m src.train
 ```
 
-Hai file test pose/feature mở cửa sổ webcam OpenCV, nên chúng không phải unit test tự động thông thường.
+`src.train` làm các bước:
 
-## 16. Trạng thái project hiện tại
+- load dataset qua `src.preprocessing.prepare_dataset()`;
+- reuse locked person split nếu `models/split_manifest.json` còn khớp dataset SHA256;
+- nếu split manifest không hợp lệ thì tạo deterministic `GroupShuffleSplit`;
+- build Personal Baseline Delta trên train recordings;
+- remove calibration samples khỏi ML dataset;
+- fit final XGBoost với params đã chốt;
+- save artifacts.
 
-| Component | Status |
-|---|---|
-| Pose detection | Done |
-| Feature extraction với 29 features | Done |
-| Dataset builder | Done |
-| Rejected-image audit script | Done |
-| Dataset V02 | Done |
-| EDA notebook | Done |
-| Preprocessing | Done |
-| Training experiment notebook | Done |
-| Model selection | Done |
-| Official held-out evaluation | Done |
-| Realtime webcam prototype | Done |
-| `src/inference.py` | Placeholder |
-| `src/train.py` | Placeholder |
-| `src/posture_predictor.py` | Placeholder |
-| `src/temporal_monitor.py` | Placeholder |
-| `src/session_statistics.py` | Placeholder |
-| `app/app.py` | Placeholder |
-
-## 17. Hướng phát triển tiếp theo
-
-Hướng V02 product gần nhất:
+Artifacts chính:
 
 ```text
-PosturePredictor
--> TemporalMonitor
--> SessionStatistics
--> Web/Application integration
--> stable V02 product
+models/best_model.joblib
+models/split_manifest.json
+models/training_metadata.json
+models/calibration_config.json
+results/calibration_audit.csv
 ```
 
-Hướng nghiên cứu V03 sau này:
+`train.py` không chạy model selection lại và không dùng holdout test để predict/score.
 
-- giảm subject-to-subject variation;
-- phân tích confusion giữa `forward_slouch` và `lean_right`;
-- cân nhắc scale/camera normalization;
-- giữ nguyên locked evaluation protocol khi so sánh V02 và V03;
-- đánh giá feature/model mới nhưng không tune trực tiếp trên held-out test set.
+## Evaluation
 
-## 18. Tài liệu liên quan
+Chạy official held-out evaluation:
 
-- [docs/Cap_nhat_Dataset_V02_EDA_Preprocessing_2026-09-27.md](docs/Cap_nhat_Dataset_V02_EDA_Preprocessing_2026-09-27.md)
-- [docs/Training_Realtime_Inference_Evaluation_V02_2026-09-27.md](docs/Training_Realtime_Inference_Evaluation_V02_2026-09-27.md)
+```powershell
+python -m src.evaluate
+```
+
+`src.evaluate`:
+
+- load model và metadata đã train;
+- verify dataset SHA256;
+- reconstruct locked unseen-person holdout từ `models/split_manifest.json`;
+- nếu representation là `personal_baseline_delta`, rebuild delta cho holdout recordings;
+- predict bằng model đã lưu;
+- lưu metrics, classification report, confusion matrix, per-person metrics và misclassifications.
+
+Output:
+
+```text
+results/evaluation/
+```
+
+Evaluation không retrain, không retune, không tạo split mới và không chọn model lại.
+
+## Realtime Test
+
+Chạy webcam integration test:
+
+```powershell
+python scripts/test_webcam_model.py
+```
+
+Tùy chọn:
+
+```powershell
+python scripts/test_webcam_model.py --camera 0
+python scripts/test_webcam_model.py --no-pose
+python scripts/test_webcam_model.py --calibration-samples 30
+```
+
+Controls:
+
+```text
+C      bắt đầu calibration mới
+R      reset và calibration lại
+Q/ESC  thoát
+```
+
+Script này test pipeline realtime V03 ở mức frame-level:
+
+```text
+Webcam
+-> PostureInferenceEngine
+-> PoseDetector
+-> FeatureExtractor
+-> PersonalCalibration
+-> PosturePredictor
+-> XGBoost prediction
+```
+
+Hiện script chưa dùng TemporalMonitor; mục tiêu hiện tại là quan sát raw prediction trước khi thêm smoothing.
+
+## Module Responsibilities
+
+| Module | Vai trò |
+|---|---|
+| `src/pose_detector.py` | Frame -> selected pose / 6 keypoints. |
+| `src/feature_extractor.py` | Pose -> RAW[29]. |
+| `src/personal_calibration.py` | Validate vector, collect calibration samples, median baseline, RAW -> DELTA, batch delta dataset. |
+| `src/posture_predictor.py` | DELTA[29] -> class label + probability. |
+| `src/inference.py` | Orchestrate frame-level realtime pipeline and calibration states. |
+| `src/train.py` | Reproducible final V03 training. |
+| `src/evaluate.py` | Official locked holdout evaluation. |
+| `src/temporal_monitor.py` | Post-prediction smoothing/yaw gating module, not yet integrated into V03 webcam test. |
+| `src/session_statistics.py` | Session-level statistics utility, future integration target. |
+
+## Realtime States
+
+`PostureInferenceEngine` trả về các state chính:
+
+```text
+CALIBRATION_REQUIRED
+CALIBRATING
+CALIBRATED
+LOW_CONFIDENCE
+NO_PERSON
+OK
+```
+
+Important behavior:
+
+- Không predict bằng RAW features trước calibration.
+- `NO_PERSON` không reset baseline.
+- `LOW_CONFIDENCE` không được thêm vào calibration buffer.
+- Baseline chỉ reset khi user bấm recalibrate.
+
+## Validation Commands
+
+```powershell
+python -m compileall src scripts
+python -m pytest -q
+python -m src.train --help
+python -m src.evaluate --help
+python scripts/test_webcam_model.py --help
+```
+
+Webcam hardware test cần camera thật nên không bắt buộc chạy trong môi trường CI/Codex.
+
+## Current Limitations
+
+- Camera protocol còn tương đối cố định, chủ yếu theo góc khoảng 45 độ từ bên trái.
+- Personal Calibration yêu cầu user ngồi correct lúc bắt đầu session.
+- Model dựa trên 2D pose, chưa dùng depth/3D.
+- Raw frame prediction có thể jitter.
+- TemporalMonitor đã tồn tại nhưng chưa được tích hợp vào webcam V03 test.
+- SessionStatistics và alert logic chưa hoàn thiện end-to-end.
+- Streamlit/app final integration vẫn là bước tiếp theo.
+- Chưa có realtime acceptance test trên nhiều người dùng/setup khác nhau.
+
+## Roadmap
+
+1. Chạy realtime webcam integration trên nhiều người dùng hơn.
+2. Ghi nhận prediction jitter sau calibration.
+3. Tích hợp TemporalMonitor vào realtime pipeline.
+4. Tích hợp SessionStatistics.
+5. Thêm warning/alert logic.
+6. Hoàn thiện Streamlit UI trong `app/`.
+7. Kiểm thử robustness với camera distance/angle khác nhau.
+8. Viết báo cáo BTL cuối cùng.
+
+## Related Documentation
+
+- [docs/V03_Personal_Baseline_Training_Evaluation_Realtime_30-09-2026.md](docs/V03_Personal_Baseline_Training_Evaluation_Realtime_30-09-2026.md)
+- [docs/v03_personal_baseline_calibration_2026-09-29.md](docs/v03_personal_baseline_calibration_2026-09-29.md)
 - [docs/feature_v2_29_features_2026-09-25.md](docs/feature_v2_29_features_2026-09-25.md)
-- [notebooks/01_eda_dataset.ipynb](notebooks/01_eda_dataset.ipynb)
 - [notebooks/02_training_experiments.ipynb](notebooks/02_training_experiments.ipynb)
 - [results/evaluation/evaluation_summary.md](results/evaluation/evaluation_summary.md)

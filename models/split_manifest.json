@@ -1,10 +1,10 @@
 {
-  "split_strategy": "GroupShuffleSplit person holdout",
+  "version": "V03",
+  "split_strategy": "reused_locked_person_holdout",
   "group_column": "person_id",
   "recording_column": "recording_id",
   "random_state": 42,
   "test_size": 0.2,
-  "test_person_ids_config": null,
   "train_persons": [
     "person02",
     "person03",
@@ -45,13 +45,13 @@
   ],
   "train_samples": 3307,
   "test_samples": 707,
-  "train_class_distribution": {
+  "train_class_distribution_raw": {
     "correct": 879,
     "forward_slouch": 757,
     "lean_left": 828,
     "lean_right": 843
   },
-  "test_class_distribution": {
+  "test_class_distribution_raw": {
     "correct": 172,
     "forward_slouch": 132,
     "lean_left": 226,

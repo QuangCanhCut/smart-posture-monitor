@@ -1,16 +1,24 @@
 """
-Official held-out evaluation for Smart Posture Monitor V02.
+Đánh giá chính thức trên holdout persons cho Smart Posture Monitor V03.
 
-Run:
+Cách chạy:
     python -m src.evaluate
 
-Inputs:
+Input chính:
     data/processed/features.csv
     models/best_model.joblib
     models/split_manifest.json
     models/training_metadata.json
 
-This script never retrains, retunes, reselects a model, or creates a new split.
+Nguyên tắc rất quan trọng:
+- File này KHÔNG train lại model.
+- File này KHÔNG tune hyperparameter.
+- File này KHÔNG chọn lại model.
+- File này KHÔNG tạo split mới.
+
+Với model V03, dữ liệu trong CSV vẫn là RAW 29 features. Vì model đã được train
+trên Personal Baseline Delta, script sẽ dựng lại delta features cho holdout
+recordings trước khi predict.
 """
 
 from __future__ import annotations
@@ -43,6 +51,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
+from src.personal_calibration import build_delta_dataset_for_recordings
 from src.preprocessing import EXPECTED_CLASSES, ID_TO_LABEL, LABEL_TO_ID, prepare_dataset
 
 DEFAULT_DATA_PATH = PROJECT_ROOT / "data" / "processed" / "features.csv"
@@ -53,10 +62,11 @@ DEFAULT_OUTPUT_DIR = PROJECT_ROOT / "results" / "evaluation"
 
 
 # ============================================================
-# Helpers
+# Helper chung
 # ============================================================
 
 def sha256_file(path: Path) -> str:
+    """Tính SHA256 để chắc chắn dataset hiện tại đúng dataset lúc train."""
     digest = hashlib.sha256()
     with path.open("rb") as handle:
         for chunk in iter(lambda: handle.read(1024 * 1024), b""):
@@ -65,6 +75,7 @@ def sha256_file(path: Path) -> str:
 
 
 def read_json(path: Path) -> dict[str, Any]:
+    """Đọc JSON artifact và kiểm tra payload là object/dict."""
     if not path.is_file():
         raise FileNotFoundError(f"Không tìm thấy file:\n{path}")
     with path.open("r", encoding="utf-8") as handle:
@@ -75,6 +86,7 @@ def read_json(path: Path) -> dict[str, Any]:
 
 
 def json_safe(value: Any) -> Any:
+    """Chuyển numpy/path/set về dạng ghi JSON được."""
     if isinstance(value, np.integer):
         return int(value)
     if isinstance(value, np.floating):
@@ -91,6 +103,7 @@ def json_safe(value: Any) -> Any:
 
 
 def write_json(path: Path, payload: dict[str, Any]) -> None:
+    """Ghi JSON UTF-8, giữ tiếng Việt có dấu."""
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
         json.dumps(json_safe(payload), indent=2, ensure_ascii=False),
@@ -99,17 +112,19 @@ def write_json(path: Path, payload: dict[str, Any]) -> None:
 
 
 def resolve_project_path(path: Path) -> Path:
+    """Cho phép CLI nhận cả path tuyệt đối lẫn path tương đối từ project root."""
     return path.resolve() if path.is_absolute() else (PROJECT_ROOT / path).resolve()
 
 
 def print_table(title: str, frame: pd.DataFrame) -> None:
+    """In DataFrame dạng bảng text để dễ đọc trong terminal."""
     print(f"\n{title}")
     print("-" * len(title))
     print(frame.to_string(index=False))
 
 
 # ============================================================
-# Artifact and contract validation
+# Kiểm tra artifact và contract
 # ============================================================
 
 def load_artifacts(
@@ -117,6 +132,7 @@ def load_artifacts(
     split_path: Path,
     metadata_path: Path,
 ) -> tuple[Any, dict[str, Any], dict[str, Any]]:
+    """Load model, split manifest và training metadata đã được train.py tạo."""
     if not model_path.is_file():
         raise FileNotFoundError(f"Không tìm thấy trained model:\n{model_path}")
 
@@ -133,6 +149,12 @@ def validate_dataset_hash(
     training_metadata: dict[str, Any],
     allow_hash_mismatch: bool,
 ) -> str:
+    """
+    Kiểm tra features.csv hiện tại có đúng phiên bản đã dùng khi train không.
+
+    Nếu hash lệch thì evaluation có thể không còn tái lập được, nên mặc định
+    phải dừng lại thay vì âm thầm đánh giá sai dataset.
+    """
     actual = sha256_file(data_path)
     expected = []
 
@@ -161,6 +183,12 @@ def validate_training_contract(
     feature_columns: list[str],
     training_metadata: dict[str, Any],
 ) -> None:
+    """
+    Đảm bảo model artifact tương thích với dataset hiện tại.
+
+    Những thứ cần khớp gồm feature names, số feature, label mapping và class
+    order. Đây là hàng rào chống dùng nhầm model cũ với schema mới.
+    """
     trained_features = training_metadata.get("feature_columns")
     if not isinstance(trained_features, list):
         raise ValueError("training_metadata.json thiếu feature_columns.")
@@ -196,7 +224,7 @@ def validate_training_contract(
 
 
 # ============================================================
-# Locked test reconstruction
+# Dựng lại holdout test set đã khóa
 # ============================================================
 
 def build_locked_test_set(
@@ -204,6 +232,12 @@ def build_locked_test_set(
     split_manifest: dict[str, Any],
     training_metadata: dict[str, Any],
 ) -> tuple[pd.DataFrame, pd.Series, pd.DataFrame, list[str]]:
+    """
+    Dựng lại RAW holdout set từ split_manifest.json.
+
+    Split được khóa theo person_id từ lúc train. Hàm này chỉ lấy đúng các
+    test persons đó ra khỏi dataset hiện tại, không tạo split mới.
+    """
     test_persons_raw = split_manifest.get("test_persons")
     if not isinstance(test_persons_raw, list) or not test_persons_raw:
         raise ValueError("split_manifest.json không chứa test_persons hợp lệ.")
@@ -256,11 +290,57 @@ def build_locked_test_set(
     return X_test, y_test, metadata_test, test_persons
 
 
+def build_locked_test_delta_set(
+    X_test_raw: pd.DataFrame,
+    y_test_raw: pd.Series,
+    metadata_test_raw: pd.DataFrame,
+    feature_columns: list[str],
+    training_metadata: dict[str, Any],
+) -> tuple[pd.DataFrame, pd.Series, pd.DataFrame, pd.DataFrame]:
+    """
+    Chuyển RAW holdout set thành Personal Baseline Delta nếu model là V03.
+
+    Calibration window của từng holdout recording được tạo từ chính các frame
+    `correct` của recording đó. Đây là protocol inference thật: người dùng mới
+    cung cấp calibration frames, sau đó model predict trên delta.
+    """
+    representation = str(training_metadata.get("representation", "raw"))
+    if representation != "personal_baseline_delta":
+        return X_test_raw, y_test_raw, metadata_test_raw, pd.DataFrame()
+
+    calibration_samples = int(training_metadata.get("calibration_samples", 30))
+    delta = build_delta_dataset_for_recordings(
+        X_raw=X_test_raw,
+        y=y_test_raw,
+        groups=metadata_test_raw["person_id"].astype(str),
+        metadata=metadata_test_raw,
+        feature_columns=feature_columns,
+        calibration_samples=calibration_samples,
+        correct_label="correct",
+    )
+
+    present_ids = set(int(x) for x in delta.y_delta.unique())
+    missing_ids = sorted(set(ID_TO_LABEL) - present_ids)
+    if missing_ids:
+        raise RuntimeError(
+            "Locked delta test set thieu class sau calibration: "
+            f"{[ID_TO_LABEL[class_id] for class_id in missing_ids]}"
+        )
+
+    return (
+        delta.X_delta,
+        delta.y_delta,
+        delta.metadata_delta,
+        delta.audit,
+    )
+
+
 # ============================================================
-# Metrics and tables
+# Metric và bảng kết quả
 # ============================================================
 
 def overall_metrics(y_true: pd.Series, y_pred: np.ndarray) -> dict[str, float]:
+    """Tính các metric tổng quan cho toàn bộ holdout set."""
     labels = sorted(ID_TO_LABEL)
     return {
         "accuracy": float(accuracy_score(y_true, y_pred)),
@@ -281,6 +361,7 @@ def overall_metrics(y_true: pd.Series, y_pred: np.ndarray) -> dict[str, float]:
 
 
 def class_report_frame(y_true: pd.Series, y_pred: np.ndarray) -> pd.DataFrame:
+    """Tạo bảng precision/recall/F1/support theo từng posture class."""
     class_ids = sorted(ID_TO_LABEL)
     names = [ID_TO_LABEL[class_id] for class_id in class_ids]
     report = classification_report(
@@ -311,6 +392,7 @@ def per_person_frame(
     y_pred: np.ndarray,
     metadata_test: pd.DataFrame,
 ) -> pd.DataFrame:
+    """Tính metric riêng cho từng holdout person để thấy model lệch ở ai."""
     labels = sorted(ID_TO_LABEL)
     work = metadata_test[["person_id"]].copy()
     work["y_true"] = np.asarray(y_true, dtype=int)
@@ -356,6 +438,7 @@ def predictions_frame(
     model: Any,
     X_test: pd.DataFrame,
 ) -> pd.DataFrame:
+    """Tạo bảng prediction chi tiết theo từng sample để debug lỗi dự đoán."""
     result = metadata_test[
         ["image_path", "session_id", "person_id", "recording_id", "label"]
     ].copy()
@@ -369,7 +452,7 @@ def predictions_frame(
     result["predicted_label"] = [ID_TO_LABEL[int(x)] for x in pred_ids]
     result["correct"] = result["true_label_id"] == result["predicted_label_id"]
 
-    # Optional: SVM may have probability=False, so this column may not exist.
+    # Không phải model nào cũng có predict_proba; có thì lưu thêm xác suất.
     if hasattr(model, "predict_proba"):
         try:
             probs = np.asarray(model.predict_proba(X_test), dtype=float)
@@ -393,7 +476,7 @@ def predictions_frame(
 
 
 # ============================================================
-# Plots
+# Lưu biểu đồ
 # ============================================================
 
 def save_confusion_plot(
@@ -403,6 +486,7 @@ def save_confusion_plot(
     title: str,
     normalized: bool,
 ) -> None:
+    """Lưu confusion matrix dạng ảnh PNG."""
     fig, ax = plt.subplots(figsize=(8, 7))
     image = ax.imshow(matrix, interpolation="nearest")
     fig.colorbar(image, ax=ax)
@@ -438,6 +522,7 @@ def save_confusion_plot(
 
 
 def save_per_person_plot(frame: pd.DataFrame, path: Path) -> None:
+    """Lưu biểu đồ Macro F1 theo từng holdout person."""
     ordered = frame.sort_values("person_id")
     fig, ax = plt.subplots(figsize=(8, 5))
     ax.bar(ordered["person_id"], ordered["macro_f1"])
@@ -454,7 +539,7 @@ def save_per_person_plot(frame: pd.DataFrame, path: Path) -> None:
 
 
 # ============================================================
-# Markdown report
+# Báo cáo Markdown
 # ============================================================
 
 def write_summary(
@@ -469,8 +554,9 @@ def write_summary(
     cv_std: float | None,
     dataset_sha256: str,
 ) -> None:
+    """Ghi báo cáo Markdown ngắn gọn để xem lại kết quả evaluation."""
     lines = [
-        "# Smart Posture Monitor V02 - Held-out Evaluation",
+        "# Smart Posture Monitor V03 - Held-out Evaluation",
         "",
         f"- Model: `{model_name}`",
         f"- Test persons: `{test_persons}`",
@@ -521,13 +607,14 @@ def write_summary(
         "- No hyperparameter tuning.",
         "- No new split.",
         "- Test persons come only from `models/split_manifest.json`.",
+        "- V03 evaluation rebuilds Personal Baseline Delta features before prediction.",
     ]
 
     path.write_text("\n".join(lines), encoding="utf-8")
 
 
 # ============================================================
-# Official evaluation
+# Luồng evaluation chính thức
 # ============================================================
 
 def evaluate(
@@ -538,10 +625,16 @@ def evaluate(
     output_dir: Path,
     allow_hash_mismatch: bool = False,
 ) -> dict[str, Any]:
+    """
+    Chạy evaluation chính thức trên locked holdout persons.
+
+    Hàm này chỉ load model đã train, dựng lại holdout delta features và predict.
+    Tuyệt đối không fit/retrain/tune/chọn model trong evaluation.
+    """
     output_dir.mkdir(parents=True, exist_ok=True)
 
     print("=" * 72)
-    print("SMART POSTURE MONITOR V02 - OFFICIAL HELD-OUT EVALUATION")
+    print("SMART POSTURE MONITOR V03 - OFFICIAL HELD-OUT EVALUATION")
     print("=" * 72)
     print(f"Dataset : {data_path}")
     print(f"Model   : {model_path}")
@@ -570,15 +663,27 @@ def evaluate(
     validate_training_contract(model, feature_columns, training_metadata)
 
     print("[4/6] Reconstructing locked unseen-person test set...")
-    X_test, y_test, metadata_test, test_persons = build_locked_test_set(
+    X_test_raw, y_test_raw, metadata_test_raw, test_persons = build_locked_test_set(
         prepared=prepared,
         split_manifest=split_manifest,
         training_metadata=training_metadata,
     )
 
     print(f"      Test persons ({len(test_persons)}): {test_persons}")
-    print(f"      Test samples: {len(X_test)}")
-    print(f"      Recordings: {metadata_test['recording_id'].nunique()}")
+    print(f"      Raw test samples: {len(X_test_raw)}")
+    print(f"      Recordings: {metadata_test_raw['recording_id'].nunique()}")
+
+    print("[4b/6] Building locked Personal Baseline Delta test set...")
+    X_test, y_test, metadata_test, calibration_audit = build_locked_test_delta_set(
+        X_test_raw=X_test_raw,
+        y_test_raw=y_test_raw,
+        metadata_test_raw=metadata_test_raw,
+        feature_columns=feature_columns,
+        training_metadata=training_metadata,
+    )
+    if not calibration_audit.empty:
+        calibration_audit.to_csv(output_dir / "test_calibration_audit.csv", index=False)
+    print(f"      Model input samples: {len(X_test)}")
 
     print("[5/6] Running the official prediction pass...")
     y_pred = np.asarray(model.predict(X_test), dtype=int).reshape(-1)
@@ -607,8 +712,14 @@ def evaluate(
     print("[6/6] Saving metrics, predictions, errors and plots...")
 
     model_name = str(training_metadata.get("model_name", type(model).__name__))
-    cv_mean_raw = training_metadata.get("cv_macro_f1_mean")
-    cv_std_raw = training_metadata.get("cv_macro_f1_std")
+    cv_mean_raw = training_metadata.get(
+        "experiment_cv_macro_f1_mean",
+        training_metadata.get("cv_macro_f1_mean"),
+    )
+    cv_std_raw = training_metadata.get(
+        "experiment_cv_macro_f1_std",
+        training_metadata.get("cv_macro_f1_std"),
+    )
     cv_mean = float(cv_mean_raw) if cv_mean_raw is not None else None
     cv_std = float(cv_std_raw) if cv_std_raw is not None else None
 
@@ -715,8 +826,9 @@ def evaluate(
 # ============================================================
 
 def parse_args() -> argparse.Namespace:
+    """Khai báo tham số dòng lệnh cho evaluation script."""
     parser = argparse.ArgumentParser(
-        description="Official unseen-person evaluation for Smart Posture Monitor V02."
+        description="Official unseen-person evaluation for Smart Posture Monitor V03."
     )
     parser.add_argument("--data", type=Path, default=DEFAULT_DATA_PATH)
     parser.add_argument("--model", type=Path, default=DEFAULT_MODEL_PATH)
@@ -732,6 +844,7 @@ def parse_args() -> argparse.Namespace:
 
 
 def main() -> None:
+    """Entry point khi chạy `python -m src.evaluate`."""
     args = parse_args()
     evaluate(
         data_path=resolve_project_path(args.data),

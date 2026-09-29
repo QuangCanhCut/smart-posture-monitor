@@ -1,0 +1,4 @@
+recording_id,person_id,total_samples,correct_samples,calibration_samples,remaining_correct,remaining_total,baseline_created,order_source,skip_reason
+person01__session01,person01,148,49,30,19,118,True,image_path_frame_index,
+person10__session01,person10,307,62,30,32,277,True,image_path_frame_index,
+person12__session01,person12,252,61,30,31,222,True,image_path_frame_index,
