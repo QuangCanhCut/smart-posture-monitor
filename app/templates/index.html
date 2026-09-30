@@ -112,6 +112,20 @@
       .custom-scrollbar::-webkit-scrollbar-thumb:hover {
         background: #64748b;
       }
+      body.dark-mode input[type="number"] {
+        background-color: #334155 !important; /* Xám Slate-700 vừa phải, không bị đen kịt */
+        color: #ffffff !important; /* Chữ trắng tinh, sáng rõ */
+        border-color: #64748b !important; /* Viền xám sáng làm nổi bật khung nhập */
+      }
+      body.dark-mode .model-name {
+        color: #4e4f50 !important;
+      }
+
+      /* Khi click chuột vào ô nhập (Focus) */
+      body.dark-mode input[type="number"]:focus {
+        background-color: #3b4d66 !important;
+        border-color: #38bdf8 !important; /* Đổi viền sang xanh Sky sáng */
+      }
     </style>
   </head>
   <body
@@ -366,7 +380,7 @@
               Gợi ý cho bạn
             </h3>
             <div class="space-y-3 text-xs">
-              <!-- Gợi ý 1: Hướng dẫn sửa dáng ngồi trực tiếp -->
+              <!-- Hướng dẫn sửa dáng ngồi trực tiếp -->
               <div class="flex items-start gap-3">
                 <div
                   id="tip-icon-1-box"
@@ -386,7 +400,7 @@
                 </p>
               </div>
 
-              <!-- Gợi ý 2: Nhắc nhở nghỉ giải lao (Chu kỳ 45 phút) -->
+              <!-- Nhắc nhở nghỉ giải lao (Chu kỳ 45 phút) -->
               <div class="flex items-start gap-3">
                 <div
                   id="tip-icon-2-box"
@@ -449,7 +463,9 @@
                   FPS</span
                 >
                 <span class="text-slate-400">|</span>
-                <span id="metric-ping" class="text-slate-700">0 ms</span>
+                <span id="metric-ping" class="text-slate-700 model-name"
+                  >0 ms</span
+                >
               </div>
             </div>
 
@@ -538,11 +554,11 @@
                   class="flex items-center gap-2 text-slate-600 font-bold bg-slate-100/90 px-3 py-1.5 rounded-lg border border-slate-200"
                 >
                   <i data-lucide="cpu" class="w-4 h-4 text-indigo-600"></i>
-                  <span
+                  <span class="model-name"
                     >Model:
                     <strong
                       id="info-model-label"
-                      class="text-slate-900 font-extrabold"
+                      class="text-slate-900 font-extrabold model-name"
                       >SVM RBF Tuned</strong
                     ></span
                   >
@@ -557,7 +573,7 @@
                   class="px-1 py-0.5 bg-slate-100 rounded border border-slate-300 text-slate-800"
                   >C</kbd
                 >
-                <span>Cân chỉnh</span>
+                <span>Căn chỉnh</span>
                 <span class="text-slate-300">•</span>
                 <kbd
                   class="px-1 py-0.5 bg-slate-100 rounded border border-slate-300 text-slate-800"
