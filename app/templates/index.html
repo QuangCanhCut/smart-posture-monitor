@@ -17,6 +17,88 @@
       body {
         font-family: "Plus Jakarta Sans", sans-serif;
       }
+
+      /* ============================= */
+      /* DARK MODE                     */
+      /* ============================= */
+      body.dark-mode {
+        background-color: #0f172a;
+        color: #e2e8f0;
+      }
+
+      body.dark-mode .bg-white {
+        background-color: #1e293b !important;
+      }
+
+      body.dark-mode .bg-slate-50 {
+        background-color: #1e293b !important;
+      }
+
+      body.dark-mode .bg-slate-100 {
+        background-color: #334155 !important;
+      }
+
+      body.dark-mode .border-slate-200,
+      body.dark-mode .border-slate-300 {
+        border-color: #475569 !important;
+      }
+
+      body.dark-mode .text-slate-900 {
+        color: #f8fafc !important;
+      }
+
+      body.dark-mode .text-slate-800 {
+        color: #e2e8f0 !important;
+      }
+
+      body.dark-mode .text-slate-700 {
+        color: #cbd5e1 !important;
+      }
+
+      body.dark-mode .text-slate-600 {
+        color: #94a3b8 !important;
+      }
+
+      body.dark-mode .text-slate-500 {
+        color: #94a3b8 !important;
+      }
+
+      body.dark-mode header {
+        background: linear-gradient(
+          to right,
+          #0f172a,
+          #1e293b,
+          #172554
+        ) !important;
+        border-color: #334155 !important;
+      }
+
+      body.dark-mode #btn-open-settings,
+      body.dark-mode #btn-sound-toggle,
+      body.dark-mode #btn-theme-toggle {
+        background-color: #1e293b !important;
+        color: #cbd5e1 !important;
+        border-color: #475569 !important;
+      }
+
+      body.dark-mode #btn-open-settings:hover,
+      body.dark-mode #btn-sound-toggle:hover,
+      body.dark-mode #btn-theme-toggle:hover {
+        background-color: #334155 !important;
+      }
+
+      body.dark-mode .bg-slate-100.rounded-full {
+        background-color: #334155 !important;
+      }
+
+      body.dark-mode #empty-log-msg {
+        background-color: #1e293b !important;
+        border-color: #475569 !important;
+      }
+
+      body.dark-mode #chart-empty-placeholder {
+        background-color: rgba(15, 23, 42, 0.92) !important;
+      }
       .custom-scrollbar::-webkit-scrollbar {
         width: 5px;
       }
@@ -93,6 +175,14 @@
             class="w-8 h-8 flex items-center justify-center text-slate-700 hover:text-slate-900 bg-white/90 border border-slate-300 rounded-lg hover:bg-slate-100 transition shadow-2xs cursor-pointer"
           >
             <i data-lucide="volume-2" class="w-4 h-4"></i>
+          </button>
+
+          <button
+            id="btn-theme-toggle"
+            title="Chuyển chế độ sáng/tối"
+            class="w-8 h-8 flex items-center justify-center text-slate-700 hover:text-slate-900 bg-white/90 border border-slate-300 rounded-lg hover:bg-slate-100 transition shadow-2xs cursor-pointer"
+          >
+            <i data-lucide="moon" class="w-4 h-4"></i>
           </button>
 
           <button
@@ -425,37 +515,66 @@
             </div>
 
             <!-- Footer nút camera & Tên model -->
-            <div
-              class="flex items-center justify-between pt-3 border-t border-slate-200 text-xs"
-            >
-              <div class="flex items-center gap-2">
-                <button
-                  id="btn-toggle-cam"
-                  class="px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold flex items-center gap-2 transition shadow-xs cursor-pointer active:scale-95"
+            <div class="pt-3 border-t border-slate-200 text-xs">
+              <div class="flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                  <button
+                    id="btn-toggle-cam"
+                    class="px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold flex items-center gap-2 transition shadow-xs cursor-pointer active:scale-95"
+                  >
+                    <i data-lucide="camera" class="w-4 h-4"></i>
+                    <span id="btn-cam-text">Bật Webcam</span>
+                  </button>
+                  <button
+                    id="btn-toggle-skeleton"
+                    class="px-3.5 py-2 rounded-xl border border-slate-300 text-slate-700 hover:bg-slate-100 hover:text-slate-900 font-bold flex items-center gap-1.5 transition cursor-pointer"
+                  >
+                    <i data-lucide="spline" class="w-4 h-4 text-slate-600"></i>
+                    <span id="btn-skeleton-text">Ẩn Khung xương</span>
+                  </button>
+                </div>
+
+                <div
+                  class="flex items-center gap-2 text-slate-600 font-bold bg-slate-100/90 px-3 py-1.5 rounded-lg border border-slate-200"
                 >
-                  <i data-lucide="camera" class="w-4 h-4"></i>
-                  <span id="btn-cam-text">Bật Webcam</span>
-                </button>
-                <button
-                  id="btn-toggle-skeleton"
-                  class="px-3.5 py-2 rounded-xl border border-slate-300 text-slate-700 hover:bg-slate-100 hover:text-slate-900 font-bold flex items-center gap-1.5 transition cursor-pointer"
-                >
-                  <i data-lucide="spline" class="w-4 h-4 text-slate-600"></i>
-                  <span id="btn-skeleton-text">Ẩn Khung xương</span>
-                </button>
+                  <i data-lucide="cpu" class="w-4 h-4 text-indigo-600"></i>
+                  <span
+                    >Model:
+                    <strong
+                      id="info-model-label"
+                      class="text-slate-900 font-extrabold"
+                      >SVM RBF Tuned</strong
+                    ></span
+                  >
+                </div>
               </div>
+
               <div
-                class="flex items-center gap-2 text-slate-600 font-bold bg-slate-100/90 px-3 py-1.5 rounded-lg border border-slate-200"
+                class="flex items-center gap-1.5 mt-3 ml-2.5 text-[12px] font-mono font-bold text-slate-500"
               >
-                <i data-lucide="cpu" class="w-4 h-4 text-indigo-600"></i>
-                <span
-                  >Model:
-                  <strong
-                    id="info-model-label"
-                    class="text-slate-900 font-extrabold"
-                    >SVM RBF Tuned</strong
-                  ></span
+                <span class="mr-4"> Phím tắt:</span>
+                <kbd
+                  class="px-1 py-0.5 bg-slate-100 rounded border border-slate-300 text-slate-800"
+                  >C</kbd
                 >
+                <span>Cân chỉnh</span>
+                <span class="text-slate-300">•</span>
+                <kbd
+                  class="px-1 py-0.5 bg-slate-100 rounded border border-slate-300 text-slate-800"
+                  >R</kbd
+                >
+                <span>Đặt lại</span>
+                <span class="text-slate-300">•</span>
+                <kbd
+                  class="px-1 py-0.5 bg-slate-100 rounded border border-slate-300 text-slate-800"
+                  >Q</kbd
+                >
+                <span>/</span>
+                <kbd
+                  class="px-1 py-0.5 bg-slate-100 rounded border border-slate-300 text-slate-800"
+                  >Esc</kbd
+                >
+                <span>Dừng</span>
               </div>
             </div>
           </div>
@@ -904,6 +1023,21 @@
     <script>
       lucide.createIcons();
 
+      // =============================
+      // DARK / LIGHT MODE
+      // =============================
+      let darkMode = localStorage.getItem("darkMode") === "true";
+
+      if (darkMode) {
+        document.body.classList.add("dark-mode");
+
+        const themeButton = document.getElementById("btn-theme-toggle");
+        if (themeButton) {
+          themeButton.innerHTML = '<i data-lucide="sun" class="w-4 h-4"></i>';
+          lucide.createIcons();
+        }
+      }
+
       const video = document.getElementById("webcam");
       const canvas = document.getElementById("output-canvas");
       const ctx = canvas.getContext("2d");
@@ -914,6 +1048,7 @@
       const connStatus = document.getElementById("connection-status");
       const alertBanner = document.getElementById("alert-banner");
       const btnReset = document.getElementById("btn-reset");
+      const btnThemeToggle = document.getElementById("btn-theme-toggle");
       const btnToggleSkeleton = document.getElementById("btn-toggle-skeleton");
       const btnClearLogs = document.getElementById("btn-clear-logs");
       const logContainer = document.getElementById("log-container");
@@ -1187,6 +1322,20 @@
           `Ngưỡng cảnh báo: ${s}s, Confidence: ${rangeConf.value}.`,
           "info",
         );
+      });
+
+      // Dark / Light Mode
+      btnThemeToggle.addEventListener("click", () => {
+        darkMode = !darkMode;
+
+        document.body.classList.toggle("dark-mode", darkMode);
+
+        btnThemeToggle.innerHTML = darkMode
+          ? '<i data-lucide="sun" class="w-4 h-4"></i>'
+          : '<i data-lucide="moon" class="w-4 h-4"></i>';
+
+        lucide.createIcons();
+        localStorage.setItem("darkMode", darkMode);
       });
 
       // Skeleton & Sound
@@ -1660,6 +1809,57 @@
       btnExportCsvQuick.addEventListener("click", exportReportCSV);
 
       initWebSocket();
+
+      // PHÍM TẮT ĐIỀU KHIỂN & HIỆU CHUẨN (CALIBRATION)
+      window.addEventListener("keydown", (e) => {
+        // Bỏ qua phím tắt nếu người dùng đang nhập văn bản trong ô input
+        if (["INPUT", "TEXTAREA"].includes(document.activeElement.tagName))
+          return;
+
+        const key = e.key.toUpperCase();
+
+        // [C] Bắt đầu Calibration: Lấy tư thế mốc
+        if (key === "C") {
+          if (!isStreaming) {
+            appendLog(
+              "Hiệu chuẩn",
+              "Vui lòng bật webcam trước khi thực hiện hiệu chuẩn!",
+              "warning",
+            );
+            return;
+          }
+          if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ action: "calibrate" }));
+          }
+          appendLog(
+            "Hiệu chuẩn",
+            "Đã lưu tư thế hiện tại làm mốc chuẩn cá nhân (Baseline).",
+            "success",
+          );
+          playBeep();
+        }
+
+        // [R] Reset và hiệu chuẩn lại
+        else if (key === "R") {
+          resetSessionData();
+          if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ action: "reset_calibration" }));
+          }
+          appendLog(
+            "Đặt lại",
+            "Đã xóa mốc cũ. Ngồi thẳng và bấm [C] để cân chỉnh lại.",
+            "info",
+          );
+        }
+
+        // [Q] hoặc [ESC]: Thoát / Tắt Webcam
+        else if (key === "Q" || e.key === "Escape") {
+          if (isStreaming) {
+            toggleCamera();
+            appendLog("Điều khiển", "Đã dừng webcam bằng phím tắt.", "info");
+          }
+        }
+      });
     </script>
   </body>
 </html>
