@@ -26,8 +26,9 @@ class SessionStatistics:
         self.alert_count = 0
         self.consecutive_bad_frames = 0
         self.last_alert_time = 0.0
+        alert_threshold_frames: int = 20
 
-    def update(self, label: str | None, alert_threshold_frames: int = 20) -> bool:
+    def update(self, label: str | None) -> bool:
         """Cập nhật thống kê frame. Trả về True nếu kích hoạt cảnh báo ngồi sai liên tục."""
         # Kích hoạt mốc thời gian xuất phát khi frame đầu tiên được gửi tới
         if self.start_time is None:
@@ -47,7 +48,7 @@ class SessionStatistics:
             self.consecutive_bad_frames += 1
 
             now = time.time()
-            if self.consecutive_bad_frames >= alert_threshold_frames:
+            if self.consecutive_bad_frames >= self.alert_threshold_frames:
                 if (now - self.last_alert_time) > 4.0:  # Debounce cảnh báo 4 giây
                     self.alert_count += 1
                     self.last_alert_time = now

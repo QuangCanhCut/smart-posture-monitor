@@ -60,7 +60,7 @@
       }
 
       body.dark-mode .text-slate-500 {
-        color: #94a3b8 !important;
+        color: #bac9de !important;
       }
 
       body.dark-mode header {
@@ -120,11 +120,29 @@
       body.dark-mode .model-name {
         color: #4e4f50 !important;
       }
-
+      /*  ----------  */
       /* Khi click chuột vào ô nhập (Focus) */
       body.dark-mode input[type="number"]:focus {
         background-color: #3b4d66 !important;
         border-color: #38bdf8 !important; /* Đổi viền sang xanh Sky sáng */
+      }
+      /* Dark mode - Live Log */
+      body.dark-mode #log-container .text-slate-600 {
+        color: #cbd5e1 !important;
+      }
+
+      body.dark-mode #log-container .text-slate-700 {
+        color: #e2e8f0 !important;
+      }
+
+      /* Dark mode - từng ô nhật ký */
+      body.dark-mode #log-container > div:not(#empty-log-msg) {
+        background-color: #273449 !important;
+        border-color: #475569 !important;
+      }
+
+      body.dark-mode #log-container > div:not(#empty-log-msg):hover {
+        background-color: #334155 !important;
       }
     </style>
   </head>
@@ -904,7 +922,7 @@
             <span
               id="modal-sum-break"
               class="text-2xl font-extrabold text-indigo-700 font-mono"
-              >05:00</span
+              >00:00</span
             >
             <span class="text-[10px] text-indigo-600 block mt-0.5"
               >Đạt chuẩn Pomodoro</span
@@ -1115,14 +1133,46 @@
       // Bộ đếm thời gian phiên cục bộ mượt mà
       let localSessionSeconds = 0;
       let sessionClockInterval = null;
-
+      // fix ở đây về break
+      // Bộ đếm thời gian nghỉ thực tế
+      let breakSeconds = 0;
+      let breakClockInterval = null;
+      let isOnBreak = false;
       function formatTime(sec) {
         const hrs = String(Math.floor(sec / 3600)).padStart(2, "0");
         const mins = String(Math.floor((sec % 3600) / 60)).padStart(2, "0");
         const secs = String(sec % 60).padStart(2, "0");
         return `${hrs}:${mins}:${secs}`;
       }
+      // fix
+      function formatBreakTime(sec) {
+        const mins = String(Math.floor(sec / 60)).padStart(2, "0");
+        const secs = String(sec % 60).padStart(2, "0");
+        return `${mins}:${secs}`;
+      }
+      function startBreakTimer() {
+        if (isOnBreak || breakClockInterval) return;
 
+        isOnBreak = true;
+
+        breakClockInterval = setInterval(() => {
+          breakSeconds++;
+
+          const breakEl = document.getElementById("modal-sum-break");
+          if (breakEl) {
+            breakEl.innerText = formatBreakTime(breakSeconds);
+          }
+        }, 1000);
+      }
+
+      function stopBreakTimer() {
+        if (breakClockInterval) {
+          clearInterval(breakClockInterval);
+          breakClockInterval = null;
+        }
+
+        isOnBreak = false;
+      }
       let currentMinuteGoodFrames = 0;
       let currentMinuteBadFrames = 0;
       let minuteIndex = 0;
@@ -1229,7 +1279,8 @@
         document.getElementById("modal-sum-time").innerText = timeStr;
         document.getElementById("modal-sum-good").innerText = `${score}%`;
         document.getElementById("modal-sum-alerts").innerText = `${alerts} lần`;
-
+        document.getElementById("modal-sum-break").innerText =
+          formatBreakTime(breakSeconds);
         const ratingEl = document.getElementById("modal-sum-rating");
         const adviceEl = document.getElementById("modal-sum-advice");
         if (score >= 85) {
@@ -1306,7 +1357,19 @@
           "text-slate-700 font-semibold leading-relaxed transition-colors";
         tipIcon2Box.className =
           "p-1.5 rounded-lg bg-emerald-50 text-emerald-600 shrink-0 mt-0.5 border border-emerald-100 transition-colors";
+        // 5. Reset thời gian nghỉ (fix)
+        if (breakClockInterval) {
+          clearInterval(breakClockInterval);
+          breakClockInterval = null;
+        }
 
+        breakSeconds = 0;
+        isOnBreak = false;
+
+        const breakEl = document.getElementById("modal-sum-break");
+        if (breakEl) {
+          breakEl.innerText = "00:00";
+        }
         appendLog(
           "Đặt lại phiên",
           "Toàn bộ thông số giám sát và biểu đồ đã được làm mới.",
@@ -1329,15 +1392,44 @@
       rangeConf.addEventListener("input", (e) => {
         txtConfVal.innerText = e.target.value;
       });
-      btnSaveSettings.addEventListener("click", () => {
-        modalSettings.classList.add("hidden");
-        const s = settingAlertSec.value || 2;
-        txtAlertThresholdLabel.innerText = `> ${s}.0s liên tục`;
-        appendLog(
-          "Cập nhật cài đặt",
-          `Ngưỡng cảnh báo: ${s}s, Confidence: ${rangeConf.value}.`,
-          "info",
-        );
+
+      // fix
+      btnSaveSettings.addEventListener("click", async () => {
+        const s = Number(settingAlertSec.value) || 2;
+
+        try {
+          const response = await fetch("/api/set_alert_threshold", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              seconds: s,
+            }),
+          });
+
+          const data = await response.json();
+
+          if (!response.ok) {
+            throw new Error(
+              data.detail || "Không thể cập nhật ngưỡng cảnh báo",
+            );
+          }
+          modalSettings.classList.add("hidden");
+          txtAlertThresholdLabel.innerText = `> ${data.seconds}.0s liên tục`;
+          appendLog(
+            "Cập nhật cài đặt",
+            `Ngưỡng cảnh báo: ${data.seconds}s (${data.threshold_frames} frame), Confidence: ${rangeConf.value}.`,
+            "info",
+          );
+        } catch (error) {
+          console.error("Lỗi cập nhật ngưỡng cảnh báo:", error);
+          appendLog(
+            "Lỗi cập nhật cài đặt",
+            "Không thể cập nhật ngưỡng cảnh báo xuống backend.",
+            "warning",
+          );
+        }
       });
 
       // Dark / Light Mode
@@ -1400,6 +1492,7 @@
       }
       loadModelInfo();
 
+      //-------------------
       function appendLog(title, desc, type = "info") {
         const empty = document.getElementById("empty-log-msg");
         if (empty) empty.remove();
@@ -1494,6 +1587,10 @@
             clearInterval(sessionClockInterval);
             sessionClockInterval = null;
           }
+          // Nếu đã đủ 45 phút → bắt đầu tính thời gian nghỉ (fix)
+          if (localSessionSeconds >= 45 * 60) {
+            startBreakTimer();
+          }
           isStreaming = false;
           btnCamText.innerText = "Bật Webcam";
           camPlaceholder.classList.remove("hidden");
@@ -1516,7 +1613,10 @@
           isStreaming = true;
           btnCamText.innerText = "Tắt Webcam";
           camPlaceholder.classList.add("hidden");
-
+          // Bật webcam lại → kết thúc thời gian nghỉ
+          if (isOnBreak) {
+            stopBreakTimer();
+          }
           video.onloadedmetadata = () => {
             canvas.width = video.videoWidth;
             canvas.height = video.videoHeight;

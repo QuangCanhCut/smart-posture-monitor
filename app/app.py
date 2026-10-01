@@ -32,6 +32,9 @@ MODEL_PATH = PROJECT_ROOT / "models" / "best_model.joblib"
 METADATA_PATH = PROJECT_ROOT / "models" / "training_metadata.json"
 YOLO_MODEL_PATH = PROJECT_ROOT / "models" / "yolo26n-pose.pt"
 
+# FPS xử lý frame của hệ thống
+FPS = 10
+
 APP_DIR = Path(__file__).resolve().parent
 TEMPLATES_DIR = APP_DIR / "templates"
 INDEX_HTML_PATH = TEMPLATES_DIR / "index.html"
@@ -80,7 +83,8 @@ app.add_middleware(
 
 class FramePayload(BaseModel):
     image: str
-
+class AlertThresholdPayload(BaseModel):
+    seconds: int
 
 # ------------------------------------------------------------
 # 4. HTTP & WebSocket Routes
@@ -97,6 +101,24 @@ async def reset_session_api():
     eng = get_engine()
     eng.reset_session()
     return JSONResponse({"status": "OK", "message": "Session reset successful"})
+
+@app.post("/api/set_alert_threshold")
+async def set_alert_threshold(payload: AlertThresholdPayload):
+    eng = get_engine()
+    # Giới hạn giá trị hợp lệ từ 1 đến 60 giây
+    seconds = max(1, min(payload.seconds, 60))
+    # Đổi số giây thành số frame
+    threshold_frames = seconds * FPS
+    # Cập nhật ngưỡng cảnh báo cho session hiện tại
+    eng.stats.alert_threshold_frames = threshold_frames
+    return JSONResponse(
+        {
+            "status": "OK",
+            "seconds": seconds,
+            "threshold_frames": threshold_frames,
+            "message": f"Cảnh báo sau {seconds} giây ({threshold_frames} frame)",
+        }
+    )
 
 @app.get("/api/info")
 async def get_system_info():
