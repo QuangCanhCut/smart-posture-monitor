@@ -1,0 +1,48 @@
+{
+  "dataset_path": "data\\processed\\features.csv",
+  "samples": 4014,
+  "raw_feature_count": 12,
+  "persons": 14,
+  "recordings": 16,
+  "classes": 4,
+  "class_distribution": {
+    "correct": 1051,
+    "forward_slouch": 889,
+    "lean_left": 1054,
+    "lean_right": 1020
+  },
+  "person_distribution": {
+    "person01": 148,
+    "person02": 277,
+    "person03": 201,
+    "person04": 275,
+    "person05": 260,
+    "person06": 240,
+    "person07": 796,
+    "person08": 226,
+    "person09": 273,
+    "person10": 307,
+    "person11": 258,
+    "person12": 252,
+    "person13": 255,
+    "person14": 246
+  },
+  "missing_values": 0,
+  "duplicate_rows": 0,
+  "duplicate_image_paths": 0,
+  "non_finite_raw_values": 0,
+  "rejected_total": 327,
+  "rejection_reasons": {
+    "low_keypoint_confidence": 327
+  },
+  "total_images": 4341,
+  "eda_findings": {
+    "all_recordings_calibratable": true,
+    "calibration_frames_removed": 480,
+    "rep13_samples": 3534,
+    "raw_normalized_subject_spread_median": 0.6891022839114802,
+    "rep_normalized_subject_spread_median": 0.4536026120185852,
+    "pca_2d_explained_variance": 0.5363927483558655,
+    "angle_samples_near_boundary": 7374
+  }
+}

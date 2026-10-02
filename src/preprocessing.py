@@ -1,243 +1,35 @@
-"""
-Tiền xử lý dữ liệu cho dự án Smart Posture Monitor.
-
-============================================================
-MỤC ĐÍCH CỦA FILE
-============================================================
-
-File này chịu trách nhiệm chuẩn bị dữ liệu đầu vào cho quá trình train model.
-
-Luồng xử lý chính:
-
-    data/processed/features.csv
-        ↓
-    load_dataset()
-        ↓
-    get_feature_columns()
-        ↓
-    validate_schema()
-        ↓
-    validate_integrity()
-        ↓
-    add_recording_id()
-        ↓
-    filter_protocol_invalid()
-        ↓
-    prepare_model_data()
-        ↓
-    X, y, groups, metadata
-        ↓
-    train.py
-
-============================================================
-LƯU Ý KIẾN TRÚC
-============================================================
-
-File này KHÔNG thực hiện:
-- StandardScaler trên toàn bộ dataset.
-- PCA trên toàn bộ dataset.
-- Xóa outlier bằng IQR.
-- Xóa feature chỉ vì correlation cao.
-- SMOTE / oversampling.
-- Random train/validation/test split theo frame.
-- Train model SVM/XGBoost/MLP.
-
-Lý do:
-Những bước trên nếu thực hiện sai vị trí có thể gây data leakage.
-Các thao tác liên quan đến scaling, PCA, GroupKFold, train model
-sẽ được thực hiện ở train.py thông qua Pipeline của sklearn.
-
-Vai trò của preprocessing.py là:
-
-    1. Đọc dữ liệu.
-    2. Kiểm tra dataset có đúng cấu trúc hay không.
-    3. Kiểm tra dữ liệu có lỗi hay không.
-    4. Hỗ trợ loại các subject vi phạm protocol thu thập dữ liệu nếu có.
-    5. Chuẩn bị X, y, groups và metadata.
-    6. Trả dữ liệu sạch cho train.py.
-"""
-
-# ============================================================
-# HƯỚNG DẪN CẬP NHẬT KHI DATASET THAY ĐỔI
-# ============================================================
-#
-# File preprocessing.py được thiết kế để KHÔNG phải sửa mỗi khi
-# dataset tăng thêm số lượng ảnh, person hoặc session.
-#
-# Các trường hợp KHÔNG cần sửa preprocessing.py:
-# - Thêm ảnh mới vào dataset.
-# - Thêm person mới, ví dụ person11, person12,...
-# - Thêm session mới, ví dụ session02, session03,...
-# - Rebuild lại data/processed/features.csv với cùng schema hiện tại.
-#
-# Sau khi cập nhật dataset, chỉ cần chạy lại:
-#
-#     python -m src.preprocessing
-#
-# và test lại:
-#
-#     python -m pytest tests/test_preprocessing.py -v
-#
-#
-# ============================================================
-# CÁC TRƯỜNG HỢP CẦN LƯU Ý / CÓ THỂ PHẢI CHỈNH CODE
-# ============================================================
-#
-# 1. Nếu FeatureExtractor thay đổi số lượng hoặc tên feature:
-#
-#    Ví dụ:
-#        V2: 29 features
-#        V3: 35 features
-#
-#    preprocessing.py đang lấy trực tiếp:
-#
-#        FeatureExtractor.FEATURE_NAMES
-#
-#    nên thông thường không cần sửa danh sách feature ở đây.
-#
-#    Tuy nhiên PHẢI rebuild lại features.csv bằng FeatureExtractor mới.
-#    Nếu CSV cũ không khớp với FeatureExtractor hiện tại,
-#    preprocessing sẽ báo lỗi schema.
-#
-#
-# 2. Nếu thay đổi hoặc thêm class:
-#
-#    Ví dụ thêm:
-#
-#        "lean_forward"
-#
-#    thì cần cập nhật:
-#
-#        EXPECTED_CLASSES
-#        LABEL_TO_ID
-#        ID_TO_LABEL
-#
-#
-# 3. Nếu thay đổi metadata của dataset:
-#
-#    Ví dụ thêm:
-#
-#        camera_id
-#        camera_angle
-#        distance
-#
-#    thì cần xem xét cập nhật:
-#
-#        METADATA_COLUMNS
-#        phần metadata trong prepare_model_data()
-#
-#
-# 4. Nếu sau này phát hiện một person thật sự vi phạm acquisition protocol:
-#
-#    Ví dụ:
-#
-#        excluded_persons = ("personXX",)
-#
-#    Hiện tại Dataset V02 không có subject nào bị loại mặc định.
-#    person05 mới đã hợp lệ và được xử lý như các person khác.
-#
-#
-# 5. Không được tự động sửa preprocessing để:
-#
-#    - random split theo frame
-#    - scale toàn bộ dataset trước khi split
-#    - PCA toàn bộ dataset trước khi split
-#    - xóa outlier chỉ vì IQR
-#    - xóa feature chỉ vì correlation cao
-#    - SMOTE trước khi split
-#
-#    Những bước này thuộc train.py / evaluation pipeline và phải
-#    được thực hiện đúng theo group/person để tránh data leakage.
-#
-#
-# ============================================================
-# NGUYÊN TẮC CHUNG
-# ============================================================
-#
-# Nếu dataset chỉ "nhiều hơn" nhưng cấu trúc không đổi:
-#     -> KHÔNG sửa preprocessing.py
-#
-# Nếu dataset "đổi schema":
-#     -> kiểm tra lại constants + validation logic
-#
-# Sau mọi lần thay đổi dataset:
-#
-#     1. Rebuild features.csv
-#     2. Chạy python -m src.preprocessing
-#     3. Chạy pytest
-#     4. Chỉ train model khi tất cả đều PASS
-#
+from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Sequence
+from collections.abc import Sequence
 
 import numpy as np
 import pandas as pd
 
-
-# ============================================================
-# IMPORT FEATURE EXTRACTOR
-# ============================================================
-#
-# Mục đích:
-# Lấy danh sách FEATURE_NAMES trực tiếp từ FeatureExtractor.
-#
-# Đây là "single source of truth":
-# preprocessing.py không tự viết lại 29 tên feature.
-#
-# Nếu FeatureExtractor thay đổi số lượng/tên feature nhưng features.csv
-# chưa được build lại thì phần kiểm tra schema sẽ phát hiện mismatch.
-#
-try:
-    # Cách chạy khuyến nghị:
-    #
-    #     python -m src.preprocessing
-    #
-    # Khi chạy theo cách này, import từ package src hoạt động bình thường.
-    from src.feature_extractor import FeatureExtractor
-
-except ModuleNotFoundError:
-    # Hỗ trợ trường hợp chạy trực tiếp:
-    #
-    #     python src/preprocessing.py
-    #
-    from feature_extractor import FeatureExtractor
+from src.feature_extractor import FeatureExtractor
 
 
-# ============================================================
-# 1. CÁC HẰNG SỐ CẤU HÌNH DATASET
-# ============================================================
+# ==========================================================
+# 1. CẤU HÌNH DATASET V03
+# ==========================================================
 
-# 4 cột metadata.
-# Các cột này dùng để quản lý/trace dữ liệu,
-# KHÔNG được đưa trực tiếp vào X để train model.
-METADATA_COLUMNS = [
+# Metadata do DatasetBuilder ghi ra. Không cột nào được đưa vào model.
+METADATA_COLUMNS = (
     "image_path",
     "session_id",
     "person_id",
     "label",
-]
+    "frame_index",
+)
 
-# 4 class chính thức của bài toán.
-EXPECTED_CLASSES = [
+EXPECTED_CLASSES = (
     "correct",
     "forward_slouch",
     "lean_left",
     "lean_right",
-]
-
-# Lấy danh sách feature trực tiếp từ FeatureExtractor V2.
-# Hiện tại phải có đúng 29 features.
-EXPECTED_FEATURE_COLUMNS = list(
-    FeatureExtractor.FEATURE_NAMES
 )
 
-EXPECTED_NUM_FEATURES = len(
-    EXPECTED_FEATURE_COLUMNS
-)
-
-# Mapping label text -> integer để dùng thống nhất trong training.
 LABEL_TO_ID = {
     "correct": 0,
     "forward_slouch": 1,
@@ -245,468 +37,187 @@ LABEL_TO_ID = {
     "lean_right": 3,
 }
 
-# Mapping ngược integer -> label text.
-# Hữu ích khi model dự đoán ra số và app cần hiển thị tên class.
-ID_TO_LABEL = {
-    value: key
-    for key, value in LABEL_TO_ID.items()
-}
+# FeatureExtractor là single source of truth cho schema RAW12.
+RAW_FEATURE_COLUMNS = tuple(FeatureExtractor.FEATURE_NAMES)
+RAW_FEATURE_COUNT = len(RAW_FEATURE_COLUMNS)
 
-
-# ============================================================
-# 2. CONTAINER CHỨA DỮ LIỆU SAU PREPROCESSING
-# ============================================================
 
 @dataclass
-class PreparedDataset:
+class PreparedRawDataset:
     """
-    Gom toàn bộ output của preprocessing vào một object.
+    Dataset RAW đã sẵn sàng để bước training xử lý tiếp.
 
-    df:
-        DataFrame đầy đủ sau khi validate + filter.
-        Bao gồm metadata, 29 features và recording_id.
-
-    X:
-        Ma trận đầu vào của model.
-        Chỉ chứa đúng 29 engineered features.
+    X_raw:
+        RAW12, chưa calibration và chưa tạo REP13.
 
     y:
-        Nhãn đã encode:
-            correct         -> 0
-            forward_slouch  -> 1
-            lean_left       -> 2
-            lean_right      -> 3
+        Label đã encode thành số.
 
     groups:
-        person_id của từng sample.
-        Dùng cho GroupKFold / LeaveOneGroupOut để chống subject leakage.
+        person_id dùng cho group-based split, tránh subject leakage.
 
     metadata:
-        Thông tin phục vụ trace/debug:
-            image_path
-            session_id
-            person_id
-            recording_id
-            label
-
-        Metadata KHÔNG được đưa vào model.
-
-    feature_columns:
-        Danh sách 29 feature theo đúng thứ tự chuẩn.
+        Thông tin để trace, chia recording và chọn calibration frames.
     """
 
     df: pd.DataFrame
-    X: pd.DataFrame
+    X_raw: pd.DataFrame
     y: pd.Series
     groups: pd.Series
     metadata: pd.DataFrame
-    feature_columns: list[str]
+    raw_feature_columns: list[str]
 
 
-# ============================================================
-# 3. ĐỌC DATASET
-# ============================================================
+# ==========================================================
+# 2. LOAD DATASET
+# ==========================================================
 
-def load_dataset(
-    csv_path: str | Path,
-) -> pd.DataFrame:
-    """
-    Đọc features.csv vào pandas DataFrame.
+def load_dataset(csv_path: str | Path) -> pd.DataFrame:
+    """Đọc features.csv và kiểm tra file tồn tại, không rỗng."""
+    path = Path(csv_path)
 
-    Kiểm tra:
-    - file có tồn tại không;
-    - path có đúng là file không;
-    - dataset có rỗng không.
+    if not path.is_file():
+        raise FileNotFoundError(f"Không tìm thấy dataset: {path}")
 
-    Function này chỉ đọc dữ liệu.
-    Chưa kiểm tra schema hay chất lượng bên trong.
-    """
+    df = pd.read_csv(path)
 
-    # Chuẩn hóa đường dẫn thành Path.
-    csv_path = Path(csv_path)
-
-    # Không tìm thấy file -> dừng ngay.
-    if not csv_path.exists():
-        raise FileNotFoundError(
-            f"Không tìm thấy dataset: {csv_path}"
-        )
-
-    # Tránh truyền nhầm một thư mục thay vì file CSV.
-    if not csv_path.is_file():
-        raise FileNotFoundError(
-            f"Đường dẫn dataset không phải file: {csv_path}"
-        )
-
-    # Đọc CSV.
-    df = pd.read_csv(csv_path)
-
-    # Dataset rỗng thì không thể train.
     if df.empty:
-        raise ValueError(
-            f"Dataset đang rỗng: {csv_path}"
-        )
+        raise ValueError(f"Dataset đang rỗng: {path}")
 
     return df
 
 
-# ============================================================
-# 4. XÁC ĐỊNH 29 FEATURE COLUMNS
-# ============================================================
+# ==========================================================
+# 3. VALIDATE SCHEMA
+# ==========================================================
 
-def get_feature_columns(
-    df: pd.DataFrame,
-) -> list[str]:
+def validate_schema(df: pd.DataFrame) -> None:
     """
-    Xác định các cột feature và kiểm tra chúng có khớp
-    với FeatureExtractor V2 hay không.
+    Kiểm tra schema của features.csv V03.
 
-    Ý tưởng:
-    - bỏ metadata;
-    - bỏ recording_id nếu đã được thêm trước đó;
-    - các cột còn lại phải đúng 29 feature chuẩn.
-
-    Nếu CSV được build từ version cũ hoặc thiếu feature,
-    function sẽ báo lỗi thay vì tiếp tục train sai dữ liệu.
+    Yêu cầu:
+    - Đủ metadata columns.
+    - Đúng RAW feature names từ FeatureExtractor.
+    - Không có cột lạ.
+    - Đủ đúng 4 class.
+    - frame_index và RAW features phải numeric.
     """
+    expected_columns = set(METADATA_COLUMNS) | set(RAW_FEATURE_COLUMNS)
+    actual_columns = set(df.columns)
 
-    # Các cột này không phải input feature của model.
-    non_feature_columns = set(
-        METADATA_COLUMNS
-    ) | {"recording_id"}
+    missing = sorted(expected_columns - actual_columns)
+    unexpected = sorted(actual_columns - expected_columns)
 
-    # Lấy tất cả cột còn lại.
-    actual_feature_columns = [
-        column
-        for column in df.columns
-        if column not in non_feature_columns
-    ]
-
-    # Kiểm tra số lượng feature.
-    if (
-        len(actual_feature_columns)
-        != EXPECTED_NUM_FEATURES
-    ):
+    if missing or unexpected:
         raise ValueError(
-            "Số lượng feature không đúng. "
-            f"Kỳ vọng {EXPECTED_NUM_FEATURES}, "
-            f"nhưng tìm thấy {len(actual_feature_columns)}."
+            "Schema features.csv không hợp lệ.\n"
+            f"Thiếu cột: {missing}\n"
+            f"Cột không mong đợi: {unexpected}"
         )
 
-    # Tìm các feature bị thiếu.
-    missing_features = [
-        feature
-        for feature in EXPECTED_FEATURE_COLUMNS
-        if feature not in actual_feature_columns
-    ]
+    actual_classes = set(df["label"].dropna().astype(str).unique())
+    expected_classes = set(EXPECTED_CLASSES)
 
-    # Tìm các feature lạ.
-    unexpected_features = [
-        feature
-        for feature in actual_feature_columns
-        if feature not in EXPECTED_FEATURE_COLUMNS
-    ]
-
-    if missing_features or unexpected_features:
-        raise ValueError(
-            "Schema feature không khớp với FeatureExtractor V2.\n"
-            f"Feature bị thiếu: {missing_features}\n"
-            f"Feature không mong đợi: {unexpected_features}"
-        )
-
-    # Trả về thứ tự chuẩn từ FeatureExtractor.
-    return EXPECTED_FEATURE_COLUMNS.copy()
-
-
-# ============================================================
-# 5. KIỂM TRA SCHEMA DATASET
-# ============================================================
-
-def validate_schema(
-    df: pd.DataFrame,
-    feature_columns: Sequence[str],
-) -> None:
-    """
-    Kiểm tra cấu trúc tổng thể của dataset.
-
-    Các bước:
-    1. Có đủ 4 metadata columns không?
-    2. Có đúng 29 features không?
-    3. Có đúng 4 labels không?
-    4. Toàn bộ feature có phải numeric không?
-
-    Đây là kiểm tra "cấu trúc".
-    NaN/Inf/duplicate sẽ được kiểm tra ở validate_integrity().
-    """
-
-    # --------------------------------------------------------
-    # BƯỚC 1: Kiểm tra metadata columns
-    # --------------------------------------------------------
-    missing_metadata = [
-        column
-        for column in METADATA_COLUMNS
-        if column not in df.columns
-    ]
-
-    if missing_metadata:
-        raise ValueError(
-            f"Thiếu metadata columns: {missing_metadata}"
-        )
-
-    # --------------------------------------------------------
-    # BƯỚC 2: Kiểm tra số lượng feature
-    # --------------------------------------------------------
-    if len(feature_columns) != EXPECTED_NUM_FEATURES:
-        raise ValueError(
-            f"Kỳ vọng {EXPECTED_NUM_FEATURES} features, "
-            f"nhưng tìm thấy {len(feature_columns)}."
-        )
-
-    # --------------------------------------------------------
-    # BƯỚC 3: Kiểm tra 4 labels
-    # --------------------------------------------------------
-    actual_classes = set(
-        df["label"]
-        .dropna()
-        .astype(str)
-        .unique()
-    )
-
-    expected_classes = set(
-        EXPECTED_CLASSES
-    )
-
-    missing_classes = sorted(
-        expected_classes - actual_classes
-    )
-
-    unexpected_classes = sorted(
-        actual_classes - expected_classes
-    )
-
-    if missing_classes or unexpected_classes:
+    if actual_classes != expected_classes:
         raise ValueError(
             "Schema label không hợp lệ.\n"
-            f"Class bị thiếu: {missing_classes}\n"
-            f"Class không mong đợi: {unexpected_classes}"
+            f"Thiếu class: {sorted(expected_classes - actual_classes)}\n"
+            f"Class lạ: {sorted(actual_classes - expected_classes)}"
         )
 
-    # --------------------------------------------------------
-    # BƯỚC 4: Kiểm tra các feature phải là numeric
-    # --------------------------------------------------------
-    non_numeric_features = [
+    numeric_columns = ["frame_index", *RAW_FEATURE_COLUMNS]
+    non_numeric = [
         column
-        for column in feature_columns
-        if not pd.api.types.is_numeric_dtype(
-            df[column]
-        )
+        for column in numeric_columns
+        if not pd.api.types.is_numeric_dtype(df[column])
     ]
 
-    if non_numeric_features:
+    if non_numeric:
         raise TypeError(
-            "Tất cả engineered features phải là numeric. "
-            f"Feature không phải numeric: {non_numeric_features}"
+            f"Các cột sau phải là numeric: {non_numeric}"
         )
 
 
-# ============================================================
-# 6. KIỂM TRA TÍNH TOÀN VẸN DỮ LIỆU
-# ============================================================
+# ==========================================================
+# 4. VALIDATE INTEGRITY
+# ==========================================================
 
-def validate_integrity(
-    df: pd.DataFrame,
-    feature_columns: Sequence[str],
-) -> None:
+def validate_integrity(df: pd.DataFrame) -> None:
     """
-    Kiểm tra chất lượng dữ liệu bên trong dataset.
+    Kiểm tra chất lượng dữ liệu nhưng KHÔNG tự sửa dữ liệu lỗi.
 
-    Các bước:
-    1. Missing value / NaN.
-    2. Metadata string rỗng.
-    3. NaN / +Inf / -Inf trong feature matrix.
-    4. Duplicate toàn bộ row.
-    5. Một image_path có nhiều label khác nhau không.
-    6. Duplicated image_path.
-
-    Quan điểm:
-    Không tự sửa lỗi bằng fillna/drop_duplicates.
-    Nếu phát hiện lỗi thì raise error để quay lại kiểm tra pipeline upstream.
+    Kiểm:
+    - Missing / chuỗi metadata rỗng.
+    - RAW12 có NaN/Inf hay không.
+    - frame_index có phải số nguyên không âm.
+    - duplicated rows / duplicated image_path.
     """
+    missing = df.isna().sum()
+    missing = missing[missing > 0]
 
-    # --------------------------------------------------------
-    # BƯỚC 1: Missing values trên toàn dataset
-    # --------------------------------------------------------
-    missing_count = int(
-        df.isna().sum().sum()
-    )
-
-    if missing_count > 0:
-        columns_with_missing = (
-            df.isna()
-            .sum()
-            .loc[
-                lambda series:
-                series > 0
-            ]
-            .to_dict()
-        )
-
+    if not missing.empty:
         raise ValueError(
-            f"Dataset chứa {missing_count} missing values. "
-            f"Các cột bị ảnh hưởng: {columns_with_missing}"
+            f"Dataset chứa missing values: {missing.to_dict()}"
         )
 
-    # --------------------------------------------------------
-    # BƯỚC 2: Metadata không được là chuỗi rỗng
-    # --------------------------------------------------------
-    for column in METADATA_COLUMNS:
-
-        empty_mask = (
-            df[column]
-            .astype(str)
-            .str.strip()
-            .eq("")
-        )
-
-        if empty_mask.any():
+    # Các metadata dạng text không được rỗng.
+    for column in ("image_path", "session_id", "person_id", "label"):
+        empty_count = int(df[column].astype(str).str.strip().eq("").sum())
+        if empty_count:
             raise ValueError(
-                f"Metadata column '{column}' có "
-                f"{int(empty_mask.sum())} giá trị rỗng."
+                f"Metadata '{column}' có {empty_count} giá trị rỗng."
             )
 
-    # --------------------------------------------------------
-    # BƯỚC 3: Feature matrix phải toàn giá trị hữu hạn
-    #
-    # np.isfinite(False) nếu gặp:
-    # - NaN
-    # - +Inf
-    # - -Inf
-    # --------------------------------------------------------
-    feature_array = (
-        df[list(feature_columns)]
-        .to_numpy(dtype=float)
-    )
+    raw = df[list(RAW_FEATURE_COLUMNS)].to_numpy(dtype=np.float64)
 
-    if not np.isfinite(feature_array).all():
-
-        invalid_locations = np.argwhere(
-            ~np.isfinite(feature_array)
-        )
-
-        first_row, first_col = (
-            invalid_locations[0]
-        )
-
-        feature_name = (
-            feature_columns[first_col]
-        )
-
+    if not np.isfinite(raw).all():
+        row, col = np.argwhere(~np.isfinite(raw))[0]
         raise ValueError(
-            "Feature matrix chứa NaN hoặc Infinity. "
-            f"Lỗi đầu tiên ở dataframe index "
-            f"{df.index[first_row]}, feature '{feature_name}'."
+            "RAW feature chứa NaN/Infinity tại "
+            f"row={df.index[row]}, feature='{RAW_FEATURE_COLUMNS[col]}'."
         )
 
-    # --------------------------------------------------------
-    # BƯỚC 4: Kiểm tra duplicated rows
-    # --------------------------------------------------------
-    duplicated_rows = df.duplicated(
-        keep=False
-    )
+    frame_index = df["frame_index"].to_numpy(dtype=np.float64)
 
-    if duplicated_rows.any():
+    if not np.isfinite(frame_index).all():
+        raise ValueError("frame_index chứa NaN hoặc Infinity.")
+
+    if np.any(frame_index < 0) or np.any(frame_index != np.floor(frame_index)):
+        raise ValueError("frame_index phải là số nguyên không âm.")
+
+    duplicated_rows = int(df.duplicated().sum())
+    if duplicated_rows:
         raise ValueError(
-            "Dataset chứa duplicated rows. "
-            f"Số row bị ảnh hưởng: {int(duplicated_rows.sum())}."
+            f"Dataset chứa {duplicated_rows} duplicated rows."
         )
 
-    # --------------------------------------------------------
-    # BƯỚC 5: Kiểm tra conflicting label
-    #
-    # Một ảnh không được có nhiều label khác nhau.
-    # --------------------------------------------------------
-    label_count_per_image = (
-        df.groupby("image_path")["label"]
-        .nunique()
-    )
-
-    conflicting_images = (
-        label_count_per_image[
-            label_count_per_image > 1
-        ]
-        .index
-        .tolist()
-    )
-
-    if conflicting_images:
-        preview = conflicting_images[:5]
-
-        raise ValueError(
-            "Phát hiện image_path có nhiều label khác nhau. "
-            f"Ví dụ: {preview}"
-        )
-
-    # --------------------------------------------------------
-    # BƯỚC 6: Kiểm tra duplicated image_path
-    #
-    # Nguyên tắc:
-    # 1 ảnh -> 1 record trong features.csv
-    # --------------------------------------------------------
-    duplicated_image_paths = (
-        df["image_path"]
-        .duplicated(keep=False)
-    )
-
-    if duplicated_image_paths.any():
-
-        duplicated_examples = (
-            df.loc[
-                duplicated_image_paths,
-                "image_path",
-            ]
+    duplicated_paths = df["image_path"].duplicated(keep=False)
+    if duplicated_paths.any():
+        examples = (
+            df.loc[duplicated_paths, "image_path"]
             .drop_duplicates()
             .head(5)
             .tolist()
         )
-
         raise ValueError(
             "Dataset chứa duplicated image_path. "
-            f"Ví dụ: {duplicated_examples}"
+            f"Ví dụ: {examples}"
         )
 
 
-# ============================================================
-# 7. TẠO recording_id
-# ============================================================
+# ==========================================================
+# 5. RECORDING ID
+# ==========================================================
 
-def add_recording_id(
-    df: pd.DataFrame,
-) -> pd.DataFrame:
+def add_recording_id(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Tạo định danh duy nhất cho recording.
+    Tạo ID duy nhất cho từng lần quay:
 
-    session_id bị reuse giữa nhiều person:
-        person01/session01
-        person02/session01
-        person03/session01
+        person07 + session02
+        -> person07__session02
 
-    Vì vậy tạo:
-        recording_id = person_id + "__" + session_id
-
-    Ví dụ:
-        person01__session01
-        person01__session02
-        person02__session01
-
-    recording_id dùng để:
-    - trace;
-    - audit;
-    - kiểm tra recording leakage;
-    - debug prediction.
-
-    recording_id KHÔNG phải feature của model.
+    recording_id dùng để chọn baseline riêng theo person/session.
     """
-
-    # Copy để không sửa trực tiếp DataFrame đầu vào.
     result = df.copy()
 
     result["recording_id"] = (
@@ -718,137 +229,80 @@ def add_recording_id(
     return result
 
 
-# ============================================================
-# 8. LỌC SUBJECT SAI ACQUISITION PROTOCOL NẾU CÓ
-# ============================================================
+# ==========================================================
+# 6. OPTIONAL PROTOCOL FILTER
+# ==========================================================
 
 def filter_protocol_invalid(
     df: pd.DataFrame,
     excluded_persons: Sequence[str] | None = None,
 ) -> pd.DataFrame:
     """
-    Loại các person đã biết chắc chắn sai protocol thu thập.
+    Loại các person đã biết chắc chắn vi phạm protocol thu thập.
 
     Đây KHÔNG phải outlier filtering.
-
-    Hiện tại Dataset V02 không có subject nào bị loại mặc định.
-    person05 mới đã hợp lệ và được xử lý như các person khác.
-
-    Function này được giữ như một utility generic để tương lai có thể
-    loại subject nếu phát hiện vi phạm protocol thật sự.
+    Mặc định không loại person nào.
     """
-
-    # Không có person nào cần loại.
     if not excluded_persons:
-        return (
-            df.copy()
-            .reset_index(drop=True)
-        )
+        return df.reset_index(drop=True).copy()
 
-    excluded_persons = tuple(
-        excluded_persons
-    )
+    excluded = {str(person) for person in excluded_persons}
+    result = df.loc[
+        ~df["person_id"].astype(str).isin(excluded)
+    ].reset_index(drop=True)
 
-    # Giữ lại các sample không thuộc danh sách bị loại.
-    result = df[
-        ~df["person_id"].isin(
-            excluded_persons
-        )
-    ].copy()
-
-    # Reset index sau filtering.
-    result.reset_index(
-        drop=True,
-        inplace=True,
-    )
-
-    # Tránh cấu hình sai làm mất toàn bộ dataset.
     if result.empty:
-        raise ValueError(
-            "Protocol filtering đã loại toàn bộ samples."
-        )
+        raise ValueError("Protocol filtering đã loại toàn bộ dataset.")
 
     return result
 
 
-# ============================================================
-# 9. CHUẨN BỊ X / y / groups / metadata
-# ============================================================
+# ==========================================================
+# 7. ENTRY POINT: FEATURES.CSV -> PREPARED RAW DATASET
+# ==========================================================
 
-def prepare_model_data(
-    df: pd.DataFrame,
-    feature_columns: Sequence[str],
-) -> PreparedDataset:
+def prepare_raw_dataset(
+    csv_path: str | Path,
+    excluded_persons: Sequence[str] | None = None,
+) -> PreparedRawDataset:
     """
-    Chuyển DataFrame đã validate thành dữ liệu sẵn sàng cho train.py.
+    Pipeline preprocessing V03:
 
-    X:
-        29 engineered features.
+        features.csv
+        -> load
+        -> validate schema
+        -> validate integrity
+        -> recording_id
+        -> optional protocol filter
+        -> X_raw / y / groups / metadata
 
-    y:
-        label đã encode.
-
-    groups:
-        person_id dùng cho GroupKFold / LeaveOneGroupOut.
-
-    metadata:
-        thông tin dùng để trace/debug, không đưa vào model.
+    Lưu ý:
+        X_raw vẫn là RAW12.
+        Calibration và RAW12 -> REP13 được làm SAU group split ở training.
     """
+    df = load_dataset(csv_path)
 
-    # --------------------------------------------------------
-    # BƯỚC 1: Tạo X
-    #
-    # X chỉ chứa đúng 29 engineered features.
-    # --------------------------------------------------------
-    X = (
-        df[list(feature_columns)]
-        .copy()
-        .astype(float)
-    )
+    validate_schema(df)
+    validate_integrity(df)
 
-    # --------------------------------------------------------
-    # BƯỚC 2: Encode y
-    # --------------------------------------------------------
-    y = df["label"].map(
-        LABEL_TO_ID
-    )
+    df = add_recording_id(df)
+    df = filter_protocol_invalid(df, excluded_persons)
 
-    # Nếu encode không được nghĩa là xuất hiện label không hợp lệ.
+    # X_raw chỉ chứa đúng RAW12, tuyệt đối không có metadata.
+    X_raw = df[list(RAW_FEATURE_COLUMNS)].astype(np.float32)
+
+    y = df["label"].map(LABEL_TO_ID)
     if y.isna().any():
+        unknown = df.loc[y.isna(), "label"].unique().tolist()
+        raise ValueError(f"Không encode được label: {unknown}")
 
-        unknown_labels = (
-            df.loc[
-                y.isna(),
-                "label",
-            ]
-            .unique()
-            .tolist()
-        )
-
-        raise ValueError(
-            f"Không thể encode các label sau: {unknown_labels}"
-        )
-
-    y = y.astype(int)
+    y = y.astype(np.int64)
     y.name = "label_id"
 
-    # --------------------------------------------------------
-    # BƯỚC 3: groups = person_id
-    #
-    # groups dùng để ngăn cùng một person xuất hiện ở cả
-    # train và validation/test.
-    # --------------------------------------------------------
-    groups = (
-        df["person_id"]
-        .copy()
-        .astype(str)
-    )
-
+    # Group split theo person để một người không xuất hiện ở cả train/test.
+    groups = df["person_id"].astype(str).copy()
     groups.name = "person_id"
 
-    # --------------------------------------------------------
-    # BƯỚC 4: Giữ metadata để trace/debug
-    # --------------------------------------------------------
     metadata = df[
         [
             "image_path",
@@ -856,276 +310,44 @@ def prepare_model_data(
             "person_id",
             "recording_id",
             "label",
+            "frame_index",
         ]
     ].copy()
 
-    # --------------------------------------------------------
-    # BƯỚC 5: Safety check chống metadata leakage vào X
-    # --------------------------------------------------------
-    leaked_columns = (
-        set(X.columns)
-        & {
-            "image_path",
-            "session_id",
-            "person_id",
-            "recording_id",
-            "label",
-        }
-    )
-
-    if leaked_columns:
-        raise RuntimeError(
-            "Phát hiện metadata leakage trong X: "
-            f"{sorted(leaked_columns)}"
-        )
-
-    # --------------------------------------------------------
-    # BƯỚC 6: X phải đúng 29 features
-    # --------------------------------------------------------
-    if X.shape[1] != EXPECTED_NUM_FEATURES:
-        raise RuntimeError(
-            "X sau preprocessing phải có "
-            f"{EXPECTED_NUM_FEATURES} features, "
-            f"nhưng hiện có {X.shape[1]}."
-        )
-
-    # --------------------------------------------------------
-    # BƯỚC 7: Tất cả output phải có cùng số sample
-    # --------------------------------------------------------
     if not (
-        len(X)
+        len(X_raw)
         == len(y)
         == len(groups)
         == len(metadata)
     ):
         raise RuntimeError(
-            "X, y, groups và metadata có số lượng sample không khớp."
+            "X_raw, y, groups và metadata không cùng số sample."
         )
 
-    return PreparedDataset(
+    return PreparedRawDataset(
         df=df.copy(),
-        X=X,
+        X_raw=X_raw,
         y=y,
         groups=groups,
         metadata=metadata,
-        feature_columns=list(
-            feature_columns
-        ),
+        raw_feature_columns=list(RAW_FEATURE_COLUMNS),
     )
 
 
-# ============================================================
-# 10. HÀM ENTRY-POINT CHÍNH
-# ============================================================
+# ==========================================================
+# CHẠY KIỂM TRA NHANH
+# ==========================================================
 
-def prepare_dataset(
-    csv_path: str | Path,
-    excluded_persons: Sequence[str] | None = None,
-) -> PreparedDataset:
-    """
-    Chạy toàn bộ preprocessing pipeline.
-
-    Luồng:
-        features.csv
-            ↓
-        load_dataset()
-            ↓
-        get_feature_columns()
-            ↓
-        validate_schema()
-            ↓
-        validate_integrity()
-            ↓
-        add_recording_id()
-            ↓
-        filter_protocol_invalid()
-            ↓
-        prepare_model_data()
-            ↓
-        PreparedDataset
-    """
-
-    # BƯỚC 1: Đọc features.csv.
-    df = load_dataset(
-        csv_path
-    )
-
-    # BƯỚC 2: Xác định đúng 29 feature columns.
-    feature_columns = get_feature_columns(
-        df
-    )
-
-    # BƯỚC 3: Kiểm tra schema.
-    validate_schema(
-        df=df,
-        feature_columns=feature_columns,
-    )
-
-    # BƯỚC 4: Kiểm tra integrity.
-    validate_integrity(
-        df=df,
-        feature_columns=feature_columns,
-    )
-
-    # BƯỚC 5: Tạo recording_id.
-    df = add_recording_id(
-        df
-    )
-
-    # BƯỚC 6: Lọc các subject sai protocol nếu có.
-    df = filter_protocol_invalid(
-        df=df,
-        excluded_persons=excluded_persons,
-    )
-
-    # BƯỚC 7: Tạo X, y, groups, metadata.
-    prepared = prepare_model_data(
-        df=df,
-        feature_columns=feature_columns,
-    )
-
-    return prepared
-
-
-# ============================================================
-# 11. IN SUMMARY SAU PREPROCESSING
-# ============================================================
-
-def print_preprocessing_summary(
-    prepared: PreparedDataset,
-    excluded_persons: Sequence[str] | None = None,
-) -> None:
-    """
-    In báo cáo nhanh để kiểm tra output preprocessing.
-
-    Function này chủ yếu dùng khi chạy thử / review.
-    """
-
-    print("=" * 60)
-    print("PREPROCESSING SUMMARY")
-    print("=" * 60)
-
-    print(
-        f"Samples        : {len(prepared.df)}"
-    )
-
-    print(
-        f"Features       : {prepared.X.shape[1]}"
-    )
-
-    print(
-        f"Persons        : {prepared.groups.nunique()}"
-    )
-
-    print(
-        f"Recordings     : "
-        f"{prepared.df['recording_id'].nunique()}"
-    )
-
-    print(
-        f"Classes        : "
-        f"{prepared.df['label'].nunique()}"
-    )
-
-    print(
-        "Excluded       : "
-        f"{list(excluded_persons or [])}"
-    )
-
-    # Kiểm tra phân bố 4 class sau preprocessing.
-    print("\nClass distribution:")
-    print(
-        prepared.df["label"]
-        .value_counts()
-        .reindex(
-            EXPECTED_CLASSES,
-            fill_value=0,
-        )
-    )
-
-    # Kiểm tra person nào còn trong dataset.
-    print("\nPersons:")
-    print(
-        sorted(
-            prepared.df[
-                "person_id"
-            ].unique()
-        )
-    )
-
-    # Kiểm tra shape đầu ra.
-    print("\nOutput shapes:")
-    print(
-        f"X        : {prepared.X.shape}"
-    )
-    print(
-        f"y        : {prepared.y.shape}"
-    )
-    print(
-        f"groups   : {prepared.groups.shape}"
-    )
-    print(
-        f"metadata : {prepared.metadata.shape}"
-    )
-
-    print("=" * 60)
-    print(
-        "PASS: Dataset is ready for train.py"
-    )
-    print("=" * 60)
-
-
-# ============================================================
-# 12. CHẠY THỬ preprocessing.py
-# ============================================================
-#
-# Đoạn này chỉ chạy khi:
-#
-#     python -m src.preprocessing
-#
-# Nếu preprocessing.py được import từ train.py,
-# phần dưới KHÔNG tự chạy.
-#
 if __name__ == "__main__":
+    project_root = Path(__file__).resolve().parents[1]
+    dataset_path = project_root / "data" / "processed" / "features.csv"
 
-    # Xác định project root:
-    #
-    # smart_posture_monitor/src/preprocessing.py
-    #                     ↑
-    #             parents[1]
-    project_root = (
-        Path(__file__)
-        .resolve()
-        .parents[1]
-    )
+    prepared = prepare_raw_dataset(dataset_path)
 
-    # Đường dẫn mặc định tới features.csv.
-    dataset_path = (
-        project_root
-        / "data"
-        / "processed"
-        / "features.csv"
-    )
-
-    # --------------------------------------------------------
-    # CẤU HÌNH LỌC PROTOCOL
-    # --------------------------------------------------------
-    #
-    # Dataset V02 hiện tại không có subject nào cần loại mặc định.
-    # person05 mới đã hợp lệ. Giữ tuple rỗng để summary hiển thị:
-    #
-    #     Excluded       : []
-    #
-    excluded_persons = ()
-
-    # Chạy preprocessing.
-    prepared_dataset = prepare_dataset(
-        csv_path=dataset_path,
-        excluded_persons=excluded_persons,
-    )
-
-    # In summary để kiểm tra.
-    print_preprocessing_summary(
-        prepared=prepared_dataset,
-        excluded_persons=excluded_persons,
-    )
+    print("=== PREPROCESSING V03 COMPLETE ===")
+    print(f"Samples     : {len(prepared.df)}")
+    print(f"RAW features: {prepared.X_raw.shape[1]}")
+    print(f"Persons     : {prepared.groups.nunique()}")
+    print(f"Recordings  : {prepared.metadata['recording_id'].nunique()}")
+    print(f"Classes     : {prepared.df['label'].nunique()}")
+    print(f"X_raw shape : {prepared.X_raw.shape}")
