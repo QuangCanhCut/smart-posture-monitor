@@ -45,23 +45,23 @@ EDA bao gồm schema/data quality, phân phối class/person/recording, rejected
 
 Loại tạm khỏi training: `person08, person11` do audit chất lượng dữ liệu. Sau exclusion còn 12 người, 14 recording và 3110 mẫu REP13 để score.
 
-Outer CV là `LeaveOneGroupOut(person_id)` (12 folds). Mỗi held-out person giữ toàn bộ recording ở test fold. Inner tuning chỉ thấy outer-train persons qua `StratifiedGroupKFold(4, shuffle=True, random_state=42)`. So sánh XGBoost, SVM RBF, Random Forest và MLP; scaler nằm trong pipeline SVM/MLP. Chạy hiện tại có `FAST_MODE=True`.
+Outer CV là `LeaveOneGroupOut(person_id)` (12 folds). Mỗi held-out person giữ toàn bộ recording ở test fold. Inner tuning chỉ thấy outer-train persons qua `StratifiedGroupKFold(4, shuffle=True, random_state=42)`. So sánh XGBoost, SVM RBF, Random Forest và MLP; scaler nằm trong pipeline SVM/MLP. Chạy hiện tại có `FAST_MODE=False`.
 
-| Model         |   LOPO Macro F1 Mean |   LOPO Macro F1 Std |   Worst Person Macro F1 |   LOPO Accuracy Mean |   Correct F1 |   Training/Search time | Notes                                                   |
-|:--------------|---------------------:|--------------------:|------------------------:|---------------------:|-------------:|-----------------------:|:--------------------------------------------------------|
-| SVM_RBF       |             0.86302  |            0.133462 |                0.621515 |             0.874355 |     0.862191 |                22.4769 | Nested LOPO; inner StratifiedGroupKFold; FAST_MODE=True |
-| MLP           |             0.86256  |            0.15435  |                0.533264 |             0.884072 |     0.893151 |                35.543  | Nested LOPO; inner StratifiedGroupKFold; FAST_MODE=True |
-| Random_Forest |             0.856171 |            0.153487 |                0.625909 |             0.874737 |     0.867031 |               125.436  | Nested LOPO; inner StratifiedGroupKFold; FAST_MODE=True |
-| XGBoost       |             0.842488 |            0.163586 |                0.559246 |             0.861305 |     0.835509 |                88.5141 | Nested LOPO; inner StratifiedGroupKFold; FAST_MODE=True |
+| Model         |   LOPO Macro F1 Mean |   LOPO Macro F1 Std |   Worst Person Macro F1 |   LOPO Accuracy Mean |   Correct F1 |   Training/Search time | Notes                                                    |
+|:--------------|---------------------:|--------------------:|------------------------:|---------------------:|-------------:|-----------------------:|:---------------------------------------------------------|
+| SVM_RBF       |             0.909258 |            0.122354 |                0.642198 |             0.91869  |     0.909944 |               109.031  | Nested LOPO; inner StratifiedGroupKFold; FAST_MODE=False |
+| MLP           |             0.869364 |            0.124294 |                0.664921 |             0.885393 |     0.897436 |                72.3069 | Nested LOPO; inner StratifiedGroupKFold; FAST_MODE=False |
+| XGBoost       |             0.848723 |            0.134024 |                0.664921 |             0.866371 |     0.866184 |               200.733  | Nested LOPO; inner StratifiedGroupKFold; FAST_MODE=False |
+| Random_Forest |             0.842999 |            0.159632 |                0.601659 |             0.864948 |     0.861818 |               561.6    | Nested LOPO; inner StratifiedGroupKFold; FAST_MODE=False |
 
 ## 10. Best model
 
 - Model: **SVM_RBF**
-- Final grouped-search params: `{"model__C": 1, "model__class_weight": null, "model__gamma": "scale"}`
-- LOPO Macro F1 mean/std: 0.863020 / 0.133462
-- Worst-person Macro F1: 0.621515
-- Correct F1 (OOF): 0.862191
-- Model: `models/best_model.joblib`
+- Final grouped-search params: `{"model__C": 0.1, "model__class_weight": null, "model__gamma": 0.1}`
+- LOPO Macro F1 mean/std: 0.909258 / 0.122354
+- Worst-person Macro F1: 0.642198
+- Correct F1 (OOF): 0.909944
+- Model: `models/best_model_v03_rep13.joblib`
 - Results: `results/v03_lopo/`
 
 ## 11. Vấn đề và rủi ro còn lại

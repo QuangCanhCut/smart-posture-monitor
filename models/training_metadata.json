@@ -44,19 +44,19 @@
   "angle_baseline_method": "PersonalCalibration circular median-like; wrapped angle deltas",
   "model_name": "SVM_RBF",
   "hyperparameters": {
-    "model__C": 1,
+    "model__C": 0.1,
     "model__class_weight": null,
-    "model__gamma": "scale"
+    "model__gamma": 0.1
   },
   "lopo_metrics": {
     "Model": "SVM_RBF",
-    "LOPO Macro F1 Mean": 0.8630195271611956,
-    "LOPO Macro F1 Std": 0.13346234606251214,
-    "Worst Person Macro F1": 0.6215147755470336,
-    "LOPO Accuracy Mean": 0.8743552762011043,
-    "Correct F1": 0.8621908127208481,
-    "Training/Search time": 22.47690359991975,
-    "Notes": "Nested LOPO; inner StratifiedGroupKFold; FAST_MODE=True"
+    "LOPO Macro F1 Mean": 0.909258397362455,
+    "LOPO Macro F1 Std": 0.12235381887380482,
+    "Worst Person Macro F1": 0.6421977613810804,
+    "LOPO Accuracy Mean": 0.9186903484659027,
+    "Correct F1": 0.9099437148217636,
+    "Training/Search time": 109.03091360011604,
+    "Notes": "Nested LOPO; inner StratifiedGroupKFold; FAST_MODE=False"
   },
   "inner_cv_strategy": "StratifiedGroupKFold(n_splits=4, shuffle=True, random_state=42)",
   "outer_cv_strategy": "LeaveOneGroupOut(person_id)",
@@ -86,51 +86,51 @@
   "rep13_scored_samples": 3110,
   "calibration_frames_removed": 420,
   "dataset_sha256": "c86a21e2ccb7f07797ba6128c2d5728e7c9095ed83d19e07cd4c4cfd1fea88d7",
-  "fast_mode": true,
-  "final_search_seconds": 2.2613660999340937,
-  "timestamp": "2026-10-02T11:07:07.734505+00:00",
+  "fast_mode": false,
+  "final_search_seconds": 11.052687699906528,
+  "timestamp": "2026-10-02T11:56:58.537855+00:00",
   "model_selection": {
     "selection_metric": "outer_LOPO_macro_f1_mean",
     "model_comparison": [
       {
         "Model": "SVM_RBF",
-        "LOPO Macro F1 Mean": 0.8630195271611956,
-        "LOPO Macro F1 Std": 0.13346234606251214,
-        "Worst Person Macro F1": 0.6215147755470336,
-        "LOPO Accuracy Mean": 0.8743552762011043,
-        "Correct F1": 0.8621908127208481,
-        "Training/Search time": 22.47690359991975,
-        "Notes": "Nested LOPO; inner StratifiedGroupKFold; FAST_MODE=True"
+        "LOPO Macro F1 Mean": 0.909258397362455,
+        "LOPO Macro F1 Std": 0.12235381887380482,
+        "Worst Person Macro F1": 0.6421977613810804,
+        "LOPO Accuracy Mean": 0.9186903484659027,
+        "Correct F1": 0.9099437148217636,
+        "Training/Search time": 109.03091360011604,
+        "Notes": "Nested LOPO; inner StratifiedGroupKFold; FAST_MODE=False"
       },
       {
         "Model": "MLP",
-        "LOPO Macro F1 Mean": 0.8625603187657016,
-        "LOPO Macro F1 Std": 0.15435008442843914,
-        "Worst Person Macro F1": 0.5332635782992694,
-        "LOPO Accuracy Mean": 0.8840721990581591,
-        "Correct F1": 0.8931506849315068,
-        "Training/Search time": 35.54301879997365,
-        "Notes": "Nested LOPO; inner StratifiedGroupKFold; FAST_MODE=True"
-      },
-      {
-        "Model": "Random_Forest",
-        "LOPO Macro F1 Mean": 0.8561709580823921,
-        "LOPO Macro F1 Std": 0.15348724854171084,
-        "Worst Person Macro F1": 0.6259090909090909,
-        "LOPO Accuracy Mean": 0.8747368628743707,
-        "Correct F1": 0.8670309653916212,
-        "Training/Search time": 125.435676000081,
-        "Notes": "Nested LOPO; inner StratifiedGroupKFold; FAST_MODE=True"
+        "LOPO Macro F1 Mean": 0.8693641366318058,
+        "LOPO Macro F1 Std": 0.12429352371433211,
+        "Worst Person Macro F1": 0.6649214659685864,
+        "LOPO Accuracy Mean": 0.8853928337643362,
+        "Correct F1": 0.8974358974358975,
+        "Training/Search time": 72.30688819976058,
+        "Notes": "Nested LOPO; inner StratifiedGroupKFold; FAST_MODE=False"
       },
       {
         "Model": "XGBoost",
-        "LOPO Macro F1 Mean": 0.84248813992525,
-        "LOPO Macro F1 Std": 0.16358618756681362,
-        "Worst Person Macro F1": 0.5592463581177152,
-        "LOPO Accuracy Mean": 0.8613054738094504,
-        "Correct F1": 0.835509138381201,
-        "Training/Search time": 88.51410569984,
-        "Notes": "Nested LOPO; inner StratifiedGroupKFold; FAST_MODE=True"
+        "LOPO Macro F1 Mean": 0.8487226471883266,
+        "LOPO Macro F1 Std": 0.1340240776167833,
+        "Worst Person Macro F1": 0.6649214659685864,
+        "LOPO Accuracy Mean": 0.8663714326777824,
+        "Correct F1": 0.8661844484629295,
+        "Training/Search time": 200.73317130003124,
+        "Notes": "Nested LOPO; inner StratifiedGroupKFold; FAST_MODE=False"
+      },
+      {
+        "Model": "Random_Forest",
+        "LOPO Macro F1 Mean": 0.8429988944459025,
+        "LOPO Macro F1 Std": 0.15963153471069835,
+        "Worst Person Macro F1": 0.6016593670964161,
+        "LOPO Accuracy Mean": 0.8649481244589635,
+        "Correct F1": 0.8618181818181818,
+        "Training/Search time": 561.599516400136,
+        "Notes": "Nested LOPO; inner StratifiedGroupKFold; FAST_MODE=False"
       }
     ]
   }
