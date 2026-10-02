@@ -1,0 +1,190 @@
+[
+  {
+    "model_name": "Base 32D (Baseline-Free)",
+    "n_features": 32,
+    "accuracy": 0.8045801526717558,
+    "macro_f1": 0.7806103107364067,
+    "balanced_accuracy": 0.7969569333461699,
+    "f1_correct": 0.9221183800623053,
+    "f1_forward_slouch": 0.7208672086720868,
+    "f1_lean_left": 0.9815303430079155,
+    "f1_lean_right": 0.4979253112033195,
+    "fs_as_lr": 8,
+    "lr_as_fs": 90,
+    "total_fs_lr_confusion": 98,
+    "per_person_f1": {
+      "person01": 0.6449589952400069,
+      "person12": 0.8767775595077245,
+      "person13": 0.6639376218323586
+    },
+    "cross_person_std": 0.1050930138687373,
+    "worst_person_f1": 0.6449589952400069,
+    "confusion_matrix": [
+      [
+        148,
+        5,
+        0,
+        17
+      ],
+      [
+        0,
+        133,
+        0,
+        8
+      ],
+      [
+        2,
+        0,
+        186,
+        0
+      ],
+      [
+        1,
+        90,
+        5,
+        60
+      ]
+    ]
+  },
+  {
+    "model_name": "Hybrid 40D (32 Abs + 8 Delta)",
+    "n_features": 40,
+    "accuracy": 0.7435114503816794,
+    "macro_f1": 0.717822933413224,
+    "balanced_accuracy": 0.747241343345849,
+    "f1_correct": 0.7990196078431373,
+    "f1_forward_slouch": 0.7580645161290323,
+    "f1_lean_left": 0.8213166144200627,
+    "f1_lean_right": 0.4928909952606635,
+    "fs_as_lr": 0,
+    "lr_as_fs": 84,
+    "total_fs_lr_confusion": 84,
+    "per_person_f1": {
+      "person01": 0.7043781615210186,
+      "person12": 0.6698828911993209,
+      "person13": 0.6594245564452819
+    },
+    "cross_person_std": 0.019206847880956553,
+    "worst_person_f1": 0.6594245564452819,
+    "confusion_matrix": [
+      [
+        163,
+        4,
+        0,
+        3
+      ],
+      [
+        0,
+        141,
+        0,
+        0
+      ],
+      [
+        55,
+        2,
+        131,
+        0
+      ],
+      [
+        20,
+        84,
+        0,
+        52
+      ]
+    ]
+  },
+  {
+    "model_name": "Clean Hybrid 28D (20 Clean + 8 Delta)",
+    "n_features": 28,
+    "accuracy": 0.7465648854961832,
+    "macro_f1": 0.7205458472991141,
+    "balanced_accuracy": 0.7501825198164372,
+    "f1_correct": 0.7990314769975787,
+    "f1_forward_slouch": 0.7642276422764228,
+    "f1_lean_left": 0.8213166144200627,
+    "f1_lean_right": 0.49760765550239233,
+    "fs_as_lr": 0,
+    "lr_as_fs": 82,
+    "total_fs_lr_confusion": 82,
+    "per_person_f1": {
+      "person01": 0.7184523809523811,
+      "person12": 0.6658748874422449,
+      "person13": 0.6621828007518797
+    },
+    "cross_person_std": 0.025699740560467907,
+    "worst_person_f1": 0.6621828007518797,
+    "confusion_matrix": [
+      [
+        165,
+        4,
+        0,
+        1
+      ],
+      [
+        0,
+        141,
+        0,
+        0
+      ],
+      [
+        56,
+        1,
+        131,
+        0
+      ],
+      [
+        22,
+        82,
+        0,
+        52
+      ]
+    ]
+  },
+  {
+    "model_name": "Full Hybrid 64D (32 Abs + 32 Delta)",
+    "n_features": 64,
+    "accuracy": 0.7908396946564885,
+    "macro_f1": 0.7776419268209236,
+    "balanced_accuracy": 0.7947474407111454,
+    "f1_correct": 0.8333333333333334,
+    "f1_forward_slouch": 0.7899159663865546,
+    "f1_lean_left": 0.8466257668711656,
+    "f1_lean_right": 0.6406926406926406,
+    "fs_as_lr": 0,
+    "lr_as_fs": 71,
+    "total_fs_lr_confusion": 71,
+    "per_person_f1": {
+      "person01": 0.9330701754385964,
+      "person12": 0.7115915014851185,
+      "person13": 0.6703963832082095
+    },
+    "cross_person_std": 0.11534843923749367,
+    "worst_person_f1": 0.6703963832082095,
+    "confusion_matrix": [
+      [
+        165,
+        4,
+        0,
+        1
+      ],
+      [
+        0,
+        141,
+        0,
+        0
+      ],
+      [
+        50,
+        0,
+        138,
+        0
+      ],
+      [
+        11,
+        71,
+        0,
+        74
+      ]
+    ]
+  }
+]

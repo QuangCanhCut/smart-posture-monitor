@@ -1,0 +1,5 @@
+Model Configuration,Features,Accuracy,Macro F1,F1 (FS),F1 (LR),FS<->LR Confusions,Person F1 Std,Worst Person F1
+Base 32D (Baseline-Free),32,80.46%,0.7806,0.7209,0.4979,98,0.1051,0.6450
+Hybrid 40D (32 Abs + 8 Delta),40,74.35%,0.7178,0.7581,0.4929,84,0.0192,0.6594
+Clean Hybrid 28D (20 Clean + 8 Delta),28,74.66%,0.7205,0.7642,0.4976,82,0.0257,0.6622
+Full Hybrid 64D (32 Abs + 32 Delta),64,79.08%,0.7776,0.7899,0.6407,71,0.1153,0.6704

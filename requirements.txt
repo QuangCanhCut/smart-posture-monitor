@@ -9,7 +9,4 @@ joblib
 ipykernel
 pytest
 tabulate
-fastapi
-uvicorn
-websockets
 streamlit

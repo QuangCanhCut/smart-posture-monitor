@@ -1,0 +1,96 @@
+{
+  "model_name": "SVM RBF Hybrid (selective)",
+  "scheme": "selective",
+  "n_features": 40,
+  "feature_columns": [
+    "shoulder_angle",
+    "eye_shoulder_angle",
+    "eye_vertical_difference",
+    "nose_x_body",
+    "nose_y_body",
+    "eye_center_x_body",
+    "eye_center_y_body",
+    "left_ear_x_body",
+    "left_ear_y_body",
+    "nose_eye_dx",
+    "nose_eye_dy",
+    "eye_width_ratio",
+    "ear_eye_ratio",
+    "nose_shoulder_center_distance",
+    "eye_shoulder_center_distance",
+    "nose_shoulder_asymmetry",
+    "eye_shoulder_asymmetry",
+    "nose_ear_ratio",
+    "head_body_angle",
+    "head_gravity_angle",
+    "nose_gravity_angle",
+    "face_pitch_angle",
+    "eye_vertical_axis_offset",
+    "nose_vertical_axis_offset",
+    "head_mean_height",
+    "head_height_spread",
+    "nose_body_angle",
+    "ear_body_angle",
+    "head_axis_angle_spread",
+    "face_shoulder_scale_ratio",
+    "ear_nose_depth_proxy",
+    "face_rotation_proxy",
+    "delta_nose_y_body",
+    "delta_head_mean_height",
+    "delta_nose_gravity_angle",
+    "delta_head_gravity_angle",
+    "delta_face_shoulder_scale_ratio",
+    "delta_eye_width_ratio",
+    "delta_face_rotation_proxy",
+    "delta_ear_nose_depth_proxy"
+  ],
+  "best_params": {
+    "svm__C": 5.0,
+    "svm__gamma": 0.005
+  },
+  "cv_macro_f1": 0.8389074110959782,
+  "test_accuracy": 0.7343511450381679,
+  "test_macro_f1": 0.7106462556673665,
+  "test_class_f1": {
+    "correct": 0.8058968058968059,
+    "forward_slouch": 0.7401574803149606,
+    "lean_left": 0.7870967741935484,
+    "lean_right": 0.5094339622641509
+  },
+  "fs_as_lr_confusion": 0,
+  "lr_as_fs_confusion": 84,
+  "classes": [
+    "correct",
+    "forward_slouch",
+    "lean_left",
+    "lean_right"
+  ],
+  "label_to_id": {
+    "correct": 0,
+    "forward_slouch": 1,
+    "lean_left": 2,
+    "lean_right": 3
+  },
+  "id_to_label": {
+    "0": "correct",
+    "1": "forward_slouch",
+    "2": "lean_left",
+    "3": "lean_right"
+  },
+  "train_persons": [
+    "person02",
+    "person04",
+    "person05",
+    "person06",
+    "person07",
+    "person08",
+    "person09",
+    "person10",
+    "person14"
+  ],
+  "test_persons": [
+    "person01",
+    "person12",
+    "person13"
+  ]
+}
