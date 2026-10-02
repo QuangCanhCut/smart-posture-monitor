@@ -1,146 +1,137 @@
 {
   "version": "V03",
-  "representation": "personal_baseline_delta",
-  "feature_mode": "personal_baseline_delta",
-  "model_name": "XGBoost Tuned",
-  "imbalance_strategy": "none",
-  "resampling_method": null,
-  "calibration_samples": 30,
-  "baseline_statistic": "median",
-  "baseline_scope": "recording_id",
-  "feature_count": 29,
-  "n_features": 29,
-  "feature_columns": [
-    "shoulder_angle",
-    "eye_shoulder_angle",
-    "eye_vertical_difference",
-    "nose_x_body",
-    "nose_y_body",
-    "eye_center_x_body",
-    "eye_center_y_body",
-    "left_ear_x_body",
-    "left_ear_y_body",
-    "nose_eye_dx",
-    "nose_eye_dy",
-    "eye_width_ratio",
-    "ear_eye_ratio",
-    "nose_shoulder_center_distance",
-    "eye_shoulder_center_distance",
-    "nose_shoulder_asymmetry",
-    "eye_shoulder_asymmetry",
-    "nose_ear_ratio",
-    "head_body_angle",
-    "head_gravity_angle",
-    "nose_gravity_angle",
-    "face_pitch_angle",
-    "eye_vertical_axis_offset",
-    "nose_vertical_axis_offset",
-    "head_mean_height",
-    "head_height_spread",
-    "nose_body_angle",
-    "ear_body_angle",
-    "head_axis_angle_spread"
+  "representation": "REP13",
+  "raw_feature_names": [
+    "shoulder_roll_deg",
+    "eye_roll_deg",
+    "head_shoulder_roll_diff_deg",
+    "neck_pitch_deg",
+    "eye_center_x_px",
+    "eye_center_y_px",
+    "shoulder_center_x_px",
+    "eye_shoulder_vertical_gap_px",
+    "eye_shoulder_horizontal_offset_px",
+    "inter_eye_distance_px",
+    "ear_nose_horizontal_span_px",
+    "shoulder_width_px"
   ],
-  "classes": [
-    "correct",
-    "forward_slouch",
-    "lean_left",
-    "lean_right"
+  "rep_feature_names": [
+    "delta_shoulder_roll_deg",
+    "delta_eye_roll_deg",
+    "delta_head_shoulder_roll_diff_deg",
+    "delta_neck_pitch_deg",
+    "delta_eye_center_x_body",
+    "delta_eye_center_y_body",
+    "delta_shoulder_center_x_body",
+    "delta_eye_shoulder_vertical_gap_body",
+    "delta_eye_shoulder_horizontal_offset_body",
+    "log_ratio_inter_eye_distance",
+    "log_ratio_ear_nose_horizontal_span",
+    "log_ratio_shoulder_width",
+    "head_drift_magnitude"
   ],
-  "label_to_id": {
+  "n_raw_features": 12,
+  "n_rep_features": 13,
+  "class_mapping": {
     "correct": 0,
     "forward_slouch": 1,
     "lean_left": 2,
     "lean_right": 3
   },
-  "id_to_label": {
-    "0": "correct",
-    "1": "forward_slouch",
-    "2": "lean_left",
-    "3": "lean_right"
+  "calibration_samples": 30,
+  "calibration_protocol": "first_30_valid_correct_sorted_by_frame_index",
+  "baseline_scope": "recording_id",
+  "angle_baseline_method": "PersonalCalibration circular median-like; wrapped angle deltas",
+  "model_name": "SVM_RBF",
+  "hyperparameters": {
+    "model__C": 1,
+    "model__class_weight": null,
+    "model__gamma": "scale"
   },
-  "best_params": {
-    "n_estimators": 200,
-    "max_depth": 6,
-    "learning_rate": 0.02,
-    "subsample": 1.0,
-    "colsample_bytree": 1.0,
-    "min_child_weight": 1,
-    "gamma": 0,
-    "reg_alpha": 0,
-    "reg_lambda": 5
+  "lopo_metrics": {
+    "Model": "SVM_RBF",
+    "LOPO Macro F1 Mean": 0.8630195271611956,
+    "LOPO Macro F1 Std": 0.13346234606251214,
+    "Worst Person Macro F1": 0.6215147755470336,
+    "LOPO Accuracy Mean": 0.8743552762011043,
+    "Correct F1": 0.8621908127208481,
+    "Training/Search time": 22.47690359991975,
+    "Notes": "Nested LOPO; inner StratifiedGroupKFold; FAST_MODE=True"
   },
-  "xgb_params": {
-    "n_estimators": 200,
-    "max_depth": 6,
-    "learning_rate": 0.02,
-    "subsample": 1.0,
-    "colsample_bytree": 1.0,
-    "min_child_weight": 1,
-    "gamma": 0,
-    "reg_alpha": 0,
-    "reg_lambda": 5
-  },
-  "experiment_cv_macro_f1_mean": 0.688936,
-  "experiment_cv_macro_f1_std": 0.140001,
-  "train_persons": [
+  "inner_cv_strategy": "StratifiedGroupKFold(n_splits=4, shuffle=True, random_state=42)",
+  "outer_cv_strategy": "LeaveOneGroupOut(person_id)",
+  "random_state": 42,
+  "number_persons": 12,
+  "number_recordings": 14,
+  "source_raw_samples": 4014,
+  "raw_samples_after_exclusion": 3530,
+  "excluded_persons": [
+    "person08",
+    "person11"
+  ],
+  "included_persons": [
+    "person01",
     "person02",
     "person03",
     "person04",
     "person05",
     "person06",
     "person07",
-    "person08",
     "person09",
-    "person11",
+    "person10",
+    "person12",
     "person13",
     "person14"
   ],
-  "test_persons": [
-    "person01",
-    "person10",
-    "person12"
-  ],
-  "train_recordings": [
-    "person02__session01",
-    "person03__session01",
-    "person04__session01",
-    "person05__session01",
-    "person06__session01",
-    "person07__session01",
-    "person07__session02",
-    "person07__session03",
-    "person08__session01",
-    "person09__session01",
-    "person11__session01",
-    "person13__session01",
-    "person14__session01"
-  ],
-  "test_recordings": [
-    "person01__session01",
-    "person10__session01",
-    "person12__session01"
-  ],
-  "n_raw_samples": 4014,
-  "raw_train_samples": 3307,
-  "raw_test_samples": 707,
-  "calibration_samples_removed": 390,
-  "delta_train_samples": 2917,
-  "raw_class_distribution": {
-    "correct": 879,
-    "forward_slouch": 757,
-    "lean_left": 828,
-    "lean_right": 843
-  },
-  "delta_class_distribution": {
-    "correct": 489,
-    "forward_slouch": 757,
-    "lean_left": 828,
-    "lean_right": 843
-  },
-  "dataset_path": "data\\processed\\features.csv",
-  "dataset_sha256": "2bc189b67d6ac75dc8a95dfb487c743b16af0f99172eebf28ce725b6c5abbb62",
-  "random_state": 42,
-  "test_size": 0.2,
-  "timestamp": "2026-09-29T19:24:42.382270+00:00"
+  "rep13_scored_samples": 3110,
+  "calibration_frames_removed": 420,
+  "dataset_sha256": "c86a21e2ccb7f07797ba6128c2d5728e7c9095ed83d19e07cd4c4cfd1fea88d7",
+  "fast_mode": true,
+  "final_search_seconds": 2.2613660999340937,
+  "timestamp": "2026-10-02T11:07:07.734505+00:00",
+  "model_selection": {
+    "selection_metric": "outer_LOPO_macro_f1_mean",
+    "model_comparison": [
+      {
+        "Model": "SVM_RBF",
+        "LOPO Macro F1 Mean": 0.8630195271611956,
+        "LOPO Macro F1 Std": 0.13346234606251214,
+        "Worst Person Macro F1": 0.6215147755470336,
+        "LOPO Accuracy Mean": 0.8743552762011043,
+        "Correct F1": 0.8621908127208481,
+        "Training/Search time": 22.47690359991975,
+        "Notes": "Nested LOPO; inner StratifiedGroupKFold; FAST_MODE=True"
+      },
+      {
+        "Model": "MLP",
+        "LOPO Macro F1 Mean": 0.8625603187657016,
+        "LOPO Macro F1 Std": 0.15435008442843914,
+        "Worst Person Macro F1": 0.5332635782992694,
+        "LOPO Accuracy Mean": 0.8840721990581591,
+        "Correct F1": 0.8931506849315068,
+        "Training/Search time": 35.54301879997365,
+        "Notes": "Nested LOPO; inner StratifiedGroupKFold; FAST_MODE=True"
+      },
+      {
+        "Model": "Random_Forest",
+        "LOPO Macro F1 Mean": 0.8561709580823921,
+        "LOPO Macro F1 Std": 0.15348724854171084,
+        "Worst Person Macro F1": 0.6259090909090909,
+        "LOPO Accuracy Mean": 0.8747368628743707,
+        "Correct F1": 0.8670309653916212,
+        "Training/Search time": 125.435676000081,
+        "Notes": "Nested LOPO; inner StratifiedGroupKFold; FAST_MODE=True"
+      },
+      {
+        "Model": "XGBoost",
+        "LOPO Macro F1 Mean": 0.84248813992525,
+        "LOPO Macro F1 Std": 0.16358618756681362,
+        "Worst Person Macro F1": 0.5592463581177152,
+        "LOPO Accuracy Mean": 0.8613054738094504,
+        "Correct F1": 0.835509138381201,
+        "Training/Search time": 88.51410569984,
+        "Notes": "Nested LOPO; inner StratifiedGroupKFold; FAST_MODE=True"
+      }
+    ]
+  }
 }

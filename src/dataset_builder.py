@@ -1,8 +1,12 @@
-import csv
-from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from __future__ import annotations
 
-# pyrefly: ignore [missing-import]
+import csv
+import re
+from collections import Counter
+from collections.abc import Mapping
+from pathlib import Path
+from typing import Any
+
 import cv2
 import numpy as np
 
@@ -10,736 +14,483 @@ from src.feature_extractor import FeatureExtractor
 from src.pose_detector import PoseDetector
 
 
-"""
-data/raw/
-   ↓
-1. Tìm tất cả ảnh
-   ↓
-2. Đọc đường dẫn ảnh
-   ↓
-3. Lấy label + person_id + session_id
-   ↓
-4. Kiểm tra cấu trúc folder có đúng không
-   ↓
-5. cv2.imread()
-   ↓
-6. PoseDetector.detect()
-   ↓
-7. Kiểm tra có đủ 6 keypoints không
-   ↓
-8. FeatureExtractor.extract()
-   ↓
-9. Có đủ 29 features không
-   ↓
-10A. HỢP LỆ                 10B. KHÔNG HỢP LỆ
-     ↓                           ↓
- features.csv              rejected_images.csv
-"""
-
-
 class DatasetBuilder:
     """
-    Quét thư mục ảnh raw, chạy PoseDetector và FeatureExtractor
-    để trích xuất vector 29 đặc trưng và xuất ra file CSV phục vụ huấn luyện ML.
+    Xây features.csv dạng: metadata + RAW features.
 
-    Cấu trúc dữ liệu BẮT BUỘC:
-        data/raw/<label>/<person_id>_<session_id>/<file>
+    Pipeline:
+        image -> PoseDetector -> FeatureExtractor -> RAW12 -> CSV
 
-    Ví dụ:
-        data/raw/correct/person01_session01/frame_0001.jpg
+    Không xử lý calibration, REP13, preprocessing hay training.
 
-    Quy ước nhãn hợp lệ:
-        - correct
-        - forward_slouch
-        - lean_left
-        - lean_right
-
-    Các ảnh bị loại sẽ được ghi log vào:
-        data/rejected/rejected_images.csv
+    Cấu trúc raw:
+        data/raw/<label>/<personXX_sessionYY>/<image>
     """
 
-    EXPECTED_FEATURE_COUNT = 29
-
-    VALID_LABELS = {
+    VALID_LABELS = (
         "correct",
         "forward_slouch",
         "lean_left",
         "lean_right",
-    }
+    )
+    IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
 
-    IMAGE_EXTENSIONS = {
-        ".jpg",
-        ".jpeg",
-        ".png",
-        ".bmp",
-        ".webp",
-    }
+    # Không hard-code 14 người: person15/session03... vẫn dùng được.
+    PERSON_SESSION_RE = re.compile(
+        r"^(person\d+)_(session\d+)$",
+        re.IGNORECASE,
+    )
+    FRAME_INDEX_RE = re.compile(r"frame[_-]?(\d+)", re.IGNORECASE)
 
     def __init__(
         self,
-        raw_data_dir: Optional[str] = None,
-        output_csv_path: Optional[str] = None,
-        rejected_csv_path: Optional[str] = None,
-        detector: Optional[PoseDetector] = None,
-        extractor: Optional[FeatureExtractor] = None,
-    ):
-        project_root = Path(__file__).resolve().parents[1]
+        raw_data_dir: str | Path | None = None,
+        output_csv_path: str | Path | None = None,
+        rejected_csv_path: str | Path | None = None,
+        detector: PoseDetector | None = None,
+        extractor: FeatureExtractor | None = None,
+    ) -> None:
+        root = Path(__file__).resolve().parents[1]
 
-        self.raw_data_dir = (
-            Path(raw_data_dir)
-            if raw_data_dir
-            else project_root / "data" / "raw"
+        self.raw_data_dir = Path(raw_data_dir or root / "data" / "raw")
+        self.output_csv_path = Path(
+            output_csv_path or root / "data" / "processed" / "features.csv"
+        )
+        self.rejected_csv_path = Path(
+            rejected_csv_path
+            or root / "data" / "rejected" / "rejected_images.csv"
         )
 
-        self.output_csv_path = (
-            Path(output_csv_path)
-            if output_csv_path
-            else project_root / "data" / "processed" / "features.csv"
-        )
-
-        self.rejected_csv_path = (
-            Path(rejected_csv_path)
-            if rejected_csv_path
-            else project_root / "data" / "rejected" / "rejected_images.csv"
-        )
-
-        # Sử dụng detector và extractor được truyền vào hoặc tự khởi tạo.
         self.detector = detector if detector is not None else PoseDetector()
         self.extractor = extractor if extractor is not None else FeatureExtractor()
 
-        # DatasetBuilder V2 yêu cầu đúng FeatureExtractor 29 features.
+        # FeatureExtractor là nguồn duy nhất định nghĩa schema RAW.
         self.feature_names = list(self.extractor.FEATURE_NAMES)
+        self.feature_count = len(self.feature_names)
 
-        if len(self.feature_names) != self.EXPECTED_FEATURE_COUNT:
-            raise ValueError(
-                "DatasetBuilder yêu cầu FeatureExtractor trả về "
-                f"{self.EXPECTED_FEATURE_COUNT} features, nhưng FEATURE_NAMES "
-                f"hiện có {len(self.feature_names)}."
-            )
+        if self.feature_count == 0:
+            raise ValueError("FeatureExtractor.FEATURE_NAMES đang rỗng.")
 
-        # Headers của CSV dataset: Metadata + Label + 29 Features.
         self.headers = [
             "image_path",
             "session_id",
             "person_id",
             "label",
-        ] + self.feature_names
-
-        # Headers của CSV ghi lại các ảnh bị loại.
+            "frame_index",
+            *self.feature_names,
+        ]
         self.rejected_headers = [
             "image_path",
             "session_id",
             "person_id",
             "label",
+            "frame_index",
             "reason",
             "detail",
             "person_confidence",
             "keypoint_confidences",
         ]
 
-    def _parse_path_info(
+    # ==========================================================
+    # 1. SCAN + PARSE METADATA
+    # ==========================================================
+
+    def _find_images(self) -> list[Path]:
+        """Tìm ảnh hợp lệ và sort để thứ tự build ổn định."""
+        return sorted(
+            (
+                p for p in self.raw_data_dir.rglob("*")
+                if p.is_file() and p.suffix.lower() in self.IMAGE_EXTENSIONS
+            ),
+            key=lambda p: p.as_posix(),
+        )
+
+    def _parse_metadata(
         self,
         image_path: Path,
-    ) -> Tuple[Optional[str], str, str, Optional[str], str]:
+    ) -> tuple[str | None, str, str, int | None, str | None, str]:
         """
-        Kiểm tra và trích xuất metadata từ đường dẫn ảnh.
+        Parse:
+            <label>/<personXX_sessionYY>/<image>
 
-        Cấu trúc hợp lệ duy nhất:
-            data/raw/<label>/<person_id>_<session_id>/<file>
-
-        Ví dụ:
-            data/raw/correct/person01_session01/frame_0001.jpg
-
-        Returns:
-            label, session_id, person_id, error_reason, error_detail
-
-        Nếu hợp lệ:
-            error_reason = None
-            error_detail = ""
+        Return:
+            label, session_id, person_id, frame_index, error, detail
         """
-
         try:
-            rel_path = image_path.relative_to(self.raw_data_dir)
+            parts = image_path.relative_to(self.raw_data_dir).parts
         except ValueError:
             return (
-                None,
-                "unknown",
-                "unknown",
+                None, "unknown", "unknown", None,
                 "invalid_folder_structure",
-                "Ảnh không nằm bên trong raw_data_dir.",
+                "Ảnh không nằm trong raw_data_dir.",
             )
 
-        parts = rel_path.parts
+        frame_index = self._frame_index(image_path)
 
-        # Phải đúng dạng: <label>/<person_session>/<file>
         if len(parts) != 3:
             return (
-                parts[0] if len(parts) >= 1 else None,
+                parts[0] if parts else None,
                 "unknown",
                 "unknown",
+                frame_index,
                 "invalid_folder_structure",
-                (
-                    "Cấu trúc phải là "
-                    "data/raw/<label>/<person_id>_<session_id>/<file>."
-                ),
+                "Cấu trúc phải là <label>/<person_id>_<session_id>/<file>.",
             )
 
-        label = parts[0]
-        person_session_folder = parts[1]
+        label, recording_folder, _ = parts
 
         if label not in self.VALID_LABELS:
             return (
-                None,
-                "unknown",
-                "unknown",
+                None, "unknown", "unknown", frame_index,
                 "invalid_label",
-                f"Label '{label}' không thuộc VALID_LABELS.",
+                f"Label '{label}' không hợp lệ.",
             )
 
-        if "_" not in person_session_folder:
+        match = self.PERSON_SESSION_RE.fullmatch(recording_folder)
+        if match is None:
             return (
-                label,
-                "unknown",
-                "unknown",
+                label, "unknown", "unknown", frame_index,
                 "invalid_person_session_folder",
-                (
-                    f"Folder '{person_session_folder}' phải có dạng "
-                    "<person_id>_<session_id>, ví dụ person01_session01."
-                ),
+                f"Folder '{recording_folder}' phải có dạng personXX_sessionYY.",
             )
 
-        person_id, session_id = person_session_folder.split("_", 1)
+        person_id, session_id = (
+            value.lower() for value in match.groups()
+        )
+        return label, session_id, person_id, frame_index, None, ""
 
-        if not person_id or not session_id:
-            return (
-                label,
-                session_id if session_id else "unknown",
-                person_id if person_id else "unknown",
-                "invalid_person_session_folder",
-                (
-                    f"Folder '{person_session_folder}' không chứa đầy đủ "
-                    "person_id và session_id."
-                ),
-            )
+    @classmethod
+    def _frame_index(cls, image_path: Path) -> int | None:
+        """Lấy số thứ tự từ frame_0001.jpg; không có thì trả None."""
+        match = cls.FRAME_INDEX_RE.search(image_path.stem)
+        return int(match.group(1)) if match else None
 
-        # Với project hiện tại, quy ước tên nên là personXX_sessionXX.
-        if not person_id.startswith("person") or not session_id.startswith("session"):
-            return (
-                label,
-                session_id,
-                person_id,
-                "invalid_person_session_folder",
-                (
-                    f"Folder '{person_session_folder}' không đúng quy ước "
-                    "personXX_sessionXX."
-                ),
-            )
-
-        return label, session_id, person_id, None, ""
+    # ==========================================================
+    # 2. KIỂM TRA POSE + RAW FEATURES
+    # ==========================================================
 
     def _validate_pose(
         self,
         pose: Any,
-    ) -> Tuple[Optional[str], str, str]:
+    ) -> tuple[str | None, str, str]:
         """
-        Kiểm tra cấu trúc output của PoseDetector trước khi FeatureExtractor chạy.
-
-        Returns:
-            reason, detail, keypoint_confidences
-
-        Nếu pose hợp lệ:
-            reason = None
+        Kiểm tra đúng 6 keypoint mà FeatureExtractor cần.
+        Return: reason, detail, chuỗi confidence để audit.
         """
-
-        if not isinstance(pose, dict):
-            return (
-                "invalid_pose_structure",
-                "PoseDetector không trả về dictionary.",
-                "",
-            )
+        if not isinstance(pose, Mapping):
+            return "invalid_pose_structure", "Pose không phải dictionary.", ""
 
         keypoints = pose.get("keypoints")
-
-        if not isinstance(keypoints, dict):
+        if not isinstance(keypoints, Mapping):
             return (
                 "invalid_pose_structure",
                 "Pose không chứa dictionary 'keypoints'.",
                 "",
             )
 
-        required_keypoints = list(PoseDetector.KEYPOINT_INDICES.keys())
-
-        missing_keypoints = [
-            name
-            for name in required_keypoints
+        missing = [
+            name for name in self.extractor.KEYPOINT_NAMES
             if name not in keypoints
         ]
-
-        if missing_keypoints:
+        if missing:
             return (
                 "missing_keypoints",
-                "Thiếu keypoint: " + ", ".join(missing_keypoints),
+                "Thiếu keypoint: " + ", ".join(missing),
                 "",
             )
 
-        confidence_parts = []
+        confidence_text: list[str] = []
 
-        for name in required_keypoints:
-            keypoint = np.asarray(keypoints[name])
-
-            if keypoint.size < 3:
+        for name in self.extractor.KEYPOINT_NAMES:
+            parsed = self._parse_keypoint(keypoints[name])
+            if parsed is None:
                 return (
                     "invalid_keypoint",
-                    f"Keypoint '{name}' không đủ [x, y, confidence].",
-                    "",
+                    f"Keypoint '{name}' không hợp lệ.",
+                    ";".join(confidence_text),
                 )
 
-            x = float(keypoint[0])
-            y = float(keypoint[1])
-            confidence = float(keypoint[2])
+            _, _, confidence = parsed
+            confidence_text.append(f"{name}={confidence:.4f}")
 
-            if not np.isfinite([x, y, confidence]).all():
+            if confidence < self.extractor.min_keypoint_confidence:
                 return (
-                    "invalid_keypoint",
-                    f"Keypoint '{name}' chứa NaN hoặc Inf.",
-                    "",
+                    "low_keypoint_confidence",
+                    (
+                        f"{name}={confidence:.4f} < "
+                        f"{self.extractor.min_keypoint_confidence:.4f}"
+                    ),
+                    ";".join(confidence_text),
                 )
 
-            confidence_parts.append(
-                f"{name}={confidence:.4f}"
-            )
-
-        return None, "", ";".join(confidence_parts)
+        return None, "", ";".join(confidence_text)
 
     @staticmethod
-    def _write_rejected(
+    def _parse_keypoint(value: Any) -> tuple[float, float, float] | None:
+        """Chuẩn hóa keypoint về (x, y, confidence)."""
+        try:
+            if isinstance(value, Mapping):
+                x = float(value["x"])
+                y = float(value["y"])
+                confidence = float(
+                    value.get(
+                        "confidence",
+                        value.get("conf", value.get("score", 1.0)),
+                    )
+                )
+            else:
+                arr = np.asarray(value, dtype=np.float64).reshape(-1)
+                if arr.size < 2:
+                    return None
+                x, y = float(arr[0]), float(arr[1])
+                confidence = float(arr[2]) if arr.size >= 3 else 1.0
+        except (TypeError, ValueError, KeyError):
+            return None
+
+        return (
+            (x, y, confidence)
+            if np.all(np.isfinite([x, y, confidence]))
+            else None
+        )
+
+    def _validate_features(self, features: Any) -> np.ndarray | None:
+        """RAW vector phải đúng dimension và không chứa NaN/Inf."""
+        if features is None:
+            return None
+
+        try:
+            vector = np.asarray(features, dtype=np.float64).reshape(-1)
+        except (TypeError, ValueError):
+            return None
+
+        if vector.shape != (self.feature_count,):
+            return None
+        if not np.all(np.isfinite(vector)):
+            return None
+
+        return vector
+
+    # ==========================================================
+    # 3. REJECT LOG
+    # ==========================================================
+
+    @staticmethod
+    def _person_confidence(pose: Any) -> float | None:
+        if not isinstance(pose, Mapping) or pose.get("person_confidence") is None:
+            return None
+
+        try:
+            value = float(pose["person_confidence"])
+        except (TypeError, ValueError):
+            return None
+
+        return value if np.isfinite(value) else None
+
+    def _reject(
+        self,
         writer: csv.writer,
+        counts: Counter[str],
         image_path: Path,
         session_id: str,
         person_id: str,
-        label: Optional[str],
+        label: str | None,
+        frame_index: int | None,
         reason: str,
         detail: str = "",
-        person_confidence: Optional[float] = None,
+        person_confidence: float | None = None,
         keypoint_confidences: str = "",
     ) -> None:
-        """
-        Ghi một ảnh bị loại vào rejected_images.csv.
-        """
-
+        """Đếm và ghi một sample bị loại vào rejected_images.csv."""
+        counts[reason] += 1
         writer.writerow(
             [
                 image_path.as_posix(),
                 session_id,
                 person_id,
-                label if label is not None else "unknown",
+                label or "unknown",
+                "" if frame_index is None else frame_index,
                 reason,
                 detail,
-                (
-                    f"{person_confidence:.6f}"
-                    if person_confidence is not None
-                    else ""
-                ),
+                "" if person_confidence is None else f"{person_confidence:.6f}",
                 keypoint_confidences,
             ]
         )
 
-    def build(self) -> Dict[str, Any]:
-        """
-        Quét toàn bộ thư mục raw, trích xuất 29 đặc trưng và ghi ra CSV.
+    # ==========================================================
+    # 4. BUILD
+    # ==========================================================
 
-        Đồng thời ghi toàn bộ ảnh bị loại cùng lý do vào
-        data/rejected/rejected_images.csv.
-
-        Trả về dictionary báo cáo thống kê.
-        """
-
-        if not self.raw_data_dir.exists():
+    def build(self) -> dict[str, Any]:
+        """Quét toàn bộ raw data và ghi metadata + RAW features."""
+        if not self.raw_data_dir.is_dir():
             raise FileNotFoundError(
-                f"Thư mục dữ liệu raw không tồn tại: {self.raw_data_dir}\n"
-                "Cấu trúc yêu cầu:\n"
-                "data/raw/<label>/<person_id>_<session_id>/<file>\n"
-                f"Labels hợp lệ: {sorted(self.VALID_LABELS)}"
+                f"Không tìm thấy raw data directory: {self.raw_data_dir}"
             )
 
-        # Tạo thư mục output nếu chưa có.
+        image_paths = self._find_images()
+        if not image_paths:
+            raise ValueError(f"Không tìm thấy ảnh trong: {self.raw_data_dir}")
+
         self.output_csv_path.parent.mkdir(parents=True, exist_ok=True)
         self.rejected_csv_path.parent.mkdir(parents=True, exist_ok=True)
 
-        # Tìm toàn bộ ảnh và sort để thứ tự xử lý ổn định giữa các lần chạy.
-        all_image_paths: List[Path] = sorted(
-            [
-                p
-                for p in self.raw_data_dir.rglob("*")
-                if p.is_file()
-                and p.suffix.lower() in self.IMAGE_EXTENSIONS
-            ],
-            key=lambda p: p.as_posix(),
-        )
+        rejected: Counter[str] = Counter()
+        per_label: Counter[str] = Counter()
+        per_person: Counter[str] = Counter()
+        per_session: Counter[str] = Counter()
+        success = 0
 
-        stats: Dict[str, Any] = {
-            "total_images_found": len(all_image_paths),
-            "processed_success": 0,
-            "rejected_total": 0,
-
-            # Folder / metadata
-            "skipped_invalid_folder_structure": 0,
-            "skipped_invalid_label": 0,
-            "skipped_invalid_person_session_folder": 0,
-
-            # Image / pose
-            "skipped_read_error": 0,
-            "skipped_no_person": 0,
-            "skipped_invalid_pose_structure": 0,
-            "skipped_missing_keypoints": 0,
-            "skipped_invalid_keypoint": 0,
-
-            # Feature extraction
-            "skipped_feature_extraction_failed": 0,
-            "skipped_invalid_feature_length": 0,
-            "skipped_non_finite_features": 0,
-
-            # Unexpected runtime problems
-            "skipped_processing_error": 0,
-
-            "per_label_count": {
-                label: 0
-                for label in sorted(self.VALID_LABELS)
-            },
-
-            "per_person_count": {},
-            "per_session_count": {},
-        }
-
-        print("=== BẮT ĐẦU XÂY DỰNG DATASET ===")
-        print(f"Thư mục ảnh gốc: {self.raw_data_dir}")
-        print(f"File CSV đầu ra: {self.output_csv_path}")
-        print(f"File ảnh bị loại: {self.rejected_csv_path}")
-        print(f"Số features mỗi mẫu: {len(self.feature_names)}")
-        print(f"Tổng số file ảnh phát hiện: {len(all_image_paths)}\n")
+        print("=== BUILD RAW FEATURE DATASET V03 ===")
+        print(f"Images       : {len(image_paths)}")
+        print(f"RAW features : {self.feature_count}")
+        print(f"Output       : {self.output_csv_path}")
+        print(f"Rejected     : {self.rejected_csv_path}\n")
 
         with (
-            open(
-                self.output_csv_path,
-                mode="w",
-                newline="",
-                encoding="utf-8",
-            ) as output_file,
-            open(
-                self.rejected_csv_path,
-                mode="w",
-                newline="",
-                encoding="utf-8",
-            ) as rejected_file,
+            self.output_csv_path.open("w", newline="", encoding="utf-8") as out,
+            self.rejected_csv_path.open("w", newline="", encoding="utf-8") as rej,
         ):
-            writer = csv.writer(output_file)
-            rejected_writer = csv.writer(rejected_file)
-
+            writer = csv.writer(out)
+            rejected_writer = csv.writer(rej)
             writer.writerow(self.headers)
             rejected_writer.writerow(self.rejected_headers)
 
-            for idx, img_path in enumerate(all_image_paths, start=1):
+            for index, image_path in enumerate(image_paths, start=1):
                 label = None
                 session_id = "unknown"
                 person_id = "unknown"
+                frame_index = self._frame_index(image_path)
 
                 try:
-                    # =====================================================
-                    # 1. Kiểm tra folder + parse label/person/session
-                    # =====================================================
                     (
-                        label,
-                        session_id,
-                        person_id,
-                        path_error_reason,
-                        path_error_detail,
-                    ) = self._parse_path_info(img_path)
+                        label, session_id, person_id, frame_index,
+                        error, detail,
+                    ) = self._parse_metadata(image_path)
 
-                    if path_error_reason is not None:
-                        stats[
-                            f"skipped_{path_error_reason}"
-                        ] += 1
-                        stats["rejected_total"] += 1
-
-                        self._write_rejected(
-                            rejected_writer,
-                            img_path,
-                            session_id,
-                            person_id,
-                            label,
-                            path_error_reason,
-                            path_error_detail,
+                    if error:
+                        self._reject(
+                            rejected_writer, rejected, image_path,
+                            session_id, person_id, label, frame_index,
+                            error, detail,
                         )
                         continue
 
-                    # =====================================================
-                    # 2. Đọc ảnh OpenCV
-                    # =====================================================
-                    frame = cv2.imread(str(img_path))
-
+                    frame = cv2.imread(str(image_path))
                     if frame is None:
-                        stats["skipped_read_error"] += 1
-                        stats["rejected_total"] += 1
-
-                        self._write_rejected(
-                            rejected_writer,
-                            img_path,
-                            session_id,
-                            person_id,
-                            label,
-                            "read_error",
-                            "cv2.imread() trả về None.",
+                        self._reject(
+                            rejected_writer, rejected, image_path,
+                            session_id, person_id, label, frame_index,
+                            "read_error", "cv2.imread() trả về None.",
                         )
                         continue
 
-                    # =====================================================
-                    # 3. Phát hiện pose
-                    # =====================================================
                     pose = self.detector.detect(frame)
-
                     if pose is None:
-                        stats["skipped_no_person"] += 1
-                        stats["rejected_total"] += 1
-
-                        self._write_rejected(
-                            rejected_writer,
-                            img_path,
-                            session_id,
-                            person_id,
-                            label,
-                            "no_person",
-                            (
-                                "PoseDetector.detect() trả về None. "
-                                "Không phát hiện được person thỏa điều kiện."
-                            ),
+                        self._reject(
+                            rejected_writer, rejected, image_path,
+                            session_id, person_id, label, frame_index,
+                            "no_person", "PoseDetector.detect() trả về None.",
                         )
                         continue
 
-                    person_confidence = pose.get(
-                        "person_confidence"
-                    )
+                    person_confidence = self._person_confidence(pose)
+                    pose_error, pose_detail, kp_conf = self._validate_pose(pose)
 
-                    if person_confidence is not None:
-                        person_confidence = float(
-                            person_confidence
-                        )
-
-                    # =====================================================
-                    # 4. Kiểm tra đủ 6 keypoint + dữ liệu hợp lệ
-                    # =====================================================
-                    (
-                        pose_error_reason,
-                        pose_error_detail,
-                        keypoint_confidences,
-                    ) = self._validate_pose(pose)
-
-                    if pose_error_reason is not None:
-                        stats[
-                            f"skipped_{pose_error_reason}"
-                        ] += 1
-                        stats["rejected_total"] += 1
-
-                        self._write_rejected(
-                            rejected_writer,
-                            img_path,
-                            session_id,
-                            person_id,
-                            label,
-                            pose_error_reason,
-                            pose_error_detail,
-                            person_confidence,
-                            keypoint_confidences,
+                    if pose_error:
+                        self._reject(
+                            rejected_writer, rejected, image_path,
+                            session_id, person_id, label, frame_index,
+                            pose_error, pose_detail, person_confidence, kp_conf,
                         )
                         continue
 
-                    # =====================================================
-                    # 5. Trích xuất 29 features
-                    # =====================================================
                     features = self.extractor.extract(pose)
+                    vector = self._validate_features(features)
 
-                    if features is None:
-                        stats[
-                            "skipped_feature_extraction_failed"
-                        ] += 1
-                        stats["rejected_total"] += 1
+                    if vector is None:
+                        reason = (
+                            "feature_extraction_failed"
+                            if features is None
+                            else "invalid_features"
+                        )
+                        self._reject(
+                            rejected_writer, rejected, image_path,
+                            session_id, person_id, label, frame_index,
+                            reason,
+                            f"RAW vector phải có shape ({self.feature_count},).",
+                            person_confidence,
+                            kp_conf,
+                        )
+                        continue
 
-                        confidence_values = [
-                            float(pose["keypoints"][name][2])
-                            for name in PoseDetector.KEYPOINT_INDICES
+                    # CSV nền của V03 chỉ lưu metadata + RAW12.
+                    writer.writerow(
+                        [
+                            image_path.as_posix(),
+                            session_id,
+                            person_id,
+                            label,
+                            "" if frame_index is None else frame_index,
+                            *[f"{value:.6f}" for value in vector],
                         ]
-                        min_confidence = min(confidence_values)
-
-                        self._write_rejected(
-                            rejected_writer,
-                            img_path,
-                            session_id,
-                            person_id,
-                            label,
-                            "feature_extraction_failed",
-                            (
-                                "FeatureExtractor.extract() trả về None. "
-                                "Có thể do confidence keypoint thấp hoặc "
-                                "hình học pose không đủ điều kiện. "
-                                f"Min keypoint confidence={min_confidence:.4f}."
-                            ),
-                            person_confidence,
-                            keypoint_confidences,
-                        )
-                        continue
-
-                    features_array = np.asarray(
-                        features,
-                        dtype=np.float64,
-                    ).reshape(-1)
-
-                    if len(features_array) != self.EXPECTED_FEATURE_COUNT:
-                        stats[
-                            "skipped_invalid_feature_length"
-                        ] += 1
-                        stats["rejected_total"] += 1
-
-                        self._write_rejected(
-                            rejected_writer,
-                            img_path,
-                            session_id,
-                            person_id,
-                            label,
-                            "invalid_feature_length",
-                            (
-                                f"Nhận được {len(features_array)} features, "
-                                f"nhưng yêu cầu {self.EXPECTED_FEATURE_COUNT}."
-                            ),
-                            person_confidence,
-                            keypoint_confidences,
-                        )
-                        continue
-
-                    if not np.isfinite(features_array).all():
-                        stats[
-                            "skipped_non_finite_features"
-                        ] += 1
-                        stats["rejected_total"] += 1
-
-                        self._write_rejected(
-                            rejected_writer,
-                            img_path,
-                            session_id,
-                            person_id,
-                            label,
-                            "non_finite_features",
-                            "Vector feature chứa NaN hoặc Inf.",
-                            person_confidence,
-                            keypoint_confidences,
-                        )
-                        continue
-
-                    # =====================================================
-                    # 6. Ghi mẫu hợp lệ vào features.csv
-                    # =====================================================
-                    row = [
-                        img_path.as_posix(),
-                        session_id,
-                        person_id,
-                        label,
-                    ] + [
-                        f"{value:.6f}"
-                        for value in features_array
-                    ]
-
-                    writer.writerow(row)
-
-                    stats["processed_success"] += 1
-                    stats["per_label_count"][label] += 1
-
-                    stats["per_person_count"].setdefault(
-                        person_id,
-                        0,
                     )
 
-                    stats["per_person_count"][person_id] += 1
-
-                    session_key = f"{person_id}_{session_id}"
-                    stats["per_session_count"].setdefault(
-                        session_key,
-                        0,
-                    )
-
-                    stats["per_session_count"][session_key] += 1
+                    success += 1
+                    per_label[label] += 1
+                    per_person[person_id] += 1
+                    per_session[f"{person_id}__{session_id}"] += 1
 
                 except Exception as exc:
-                    # Không để một ảnh lỗi làm dừng toàn bộ quá trình build.
-                    stats["skipped_processing_error"] += 1
-                    stats["rejected_total"] += 1
-
-                    self._write_rejected(
-                        rejected_writer,
-                        img_path,
-                        session_id,
-                        person_id,
-                        label,
+                    # Không để một ảnh lỗi làm dừng cả lần build.
+                    self._reject(
+                        rejected_writer, rejected, image_path,
+                        session_id, person_id, label, frame_index,
                         "processing_error",
                         f"{type(exc).__name__}: {exc}",
                     )
 
-                if idx % 50 == 0 or idx == len(all_image_paths):
+                if index % 100 == 0 or index == len(image_paths):
                     print(
-                        f"Đã xử lý [{idx}/{len(all_image_paths)}] ảnh | "
-                        f"Hợp lệ: {stats['processed_success']} | "
-                        f"Bị loại: {stats['rejected_total']}"
+                        f"[{index}/{len(image_paths)}] "
+                        f"valid={success} | rejected={sum(rejected.values())}"
                     )
 
-        # =====================================================
-        # 7. Báo cáo cuối
-        # =====================================================
+        stats = {
+            "total_images_found": len(image_paths),
+            "processed_success": success,
+            "rejected_total": sum(rejected.values()),
+            "rejection_counts": dict(rejected),
+            "per_label_count": dict(per_label),
+            "per_person_count": dict(per_person),
+            "per_session_count": dict(per_session),
+            "feature_count": self.feature_count,
+        }
+
+        self._print_summary(stats)
+        return stats
+
+    def _print_summary(self, stats: dict[str, Any]) -> None:
+        """Báo cáo nhanh sau khi build."""
         total = stats["total_images_found"]
         success = stats["processed_success"]
-        rejected = stats["rejected_total"]
+        rate = 100.0 * success / total if total else 0.0
 
-        success_rate = (
-            100.0 * success / total
-            if total > 0
-            else 0.0
-        )
+        print("\n=== BUILD COMPLETE ===")
+        print(f"Valid       : {success}/{total} ({rate:.2f}%)")
+        print(f"Rejected    : {stats['rejected_total']}")
+        print(f"Persons     : {len(stats['per_person_count'])}")
+        print(f"Sessions    : {len(stats['per_session_count'])}")
+        print(f"RAW features: {stats['feature_count']}")
 
-        print("\n=== HOÀN TẤT XÂY DỰNG DATASET ===")
-        print(f"File feature: {self.output_csv_path}")
-        print(f"File rejected: {self.rejected_csv_path}")
-        print(f"Số mẫu hợp lệ: {success}/{total} ({success_rate:.2f}%)")
-        print(f"Số mẫu bị loại: {rejected}/{total}")
-        print(f"Số person có mẫu hợp lệ: {len(stats['per_person_count'])}")
-        print(f"Số session có mẫu hợp lệ: {len(stats['per_session_count'])}")
+        print("\nPer label:")
+        for label in self.VALID_LABELS:
+            print(f"  {label}: {stats['per_label_count'].get(label, 0)}")
 
-        print("\nChi tiết số lượng hợp lệ theo từng nhãn:")
-        for label, count in stats["per_label_count"].items():
-            print(f"  - {label}: {count} mẫu")
-
-        print("\nChi tiết số lượng hợp lệ theo từng người:")
-        for person_id, count in sorted(
-            stats["per_person_count"].items()
-        ):
-            print(f"  - {person_id}: {count} mẫu")
-
-        print("\nChi tiết số lượng hợp lệ theo từng session:")
-        for session_key, count in sorted(
-            stats["per_session_count"].items()
-        ):
-            print(f"  - {session_key}: {count} mẫu")
-
-        print("\nChi tiết lý do ảnh bị loại:")
-        rejection_stat_keys = [
-            key
-            for key in stats
-            if key.startswith("skipped_")
-        ]
-
-        for key in rejection_stat_keys:
-            if stats[key] > 0:
-                reason = key.removeprefix("skipped_")
-                print(f"  - {reason}: {stats[key]}")
-
-        return stats
+        if stats["rejection_counts"]:
+            print("\nRejected reasons:")
+            for reason, count in sorted(stats["rejection_counts"].items()):
+                print(f"  {reason}: {count}")
 
 
 if __name__ == "__main__":
-    builder = DatasetBuilder()
-    builder.build()
+    DatasetBuilder().build()

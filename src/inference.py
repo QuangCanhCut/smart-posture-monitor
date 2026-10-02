@@ -9,6 +9,7 @@ from src.feature_extractor import FeatureExtractor
 from src.personal_calibration import PersonalCalibration
 from src.pose_detector import PoseDetector
 from src.posture_predictor import PosturePredictor
+from src.representation_builder import RepresentationBuilder
 
 
 class PostureInferenceEngine:
@@ -19,16 +20,18 @@ class PostureInferenceEngine:
         Frame
         -> PoseDetector
         -> FeatureExtractor
-        -> RAW[29]
+        -> RAW12
         -> PersonalCalibration
-        -> DELTA[29]
+        -> RepresentationBuilder
+        -> REP13
         -> PosturePredictor
 
     File này chỉ xử lý frame-level inference.
     Temporal smoothing và session statistics sẽ được xử lý ở bước sau.
     """
 
-    FEATURE_COUNT = PersonalCalibration.FEATURE_DIM
+    RAW_FEATURE_COUNT = PersonalCalibration.FEATURE_DIM
+    REP_FEATURE_COUNT = len(RepresentationBuilder.OUTPUT_FEATURE_NAMES)
 
     def __init__(
         self,
@@ -42,12 +45,12 @@ class PostureInferenceEngine:
                 "calibration_samples phải lớn hơn 0."
             )
 
-        # Kiểm tra FeatureExtractor vẫn đúng contract 29 features.
-        if len(FeatureExtractor.FEATURE_NAMES) != self.FEATURE_COUNT:
+        # FeatureExtractor và PersonalCalibration phải cùng contract RAW12.
+        if len(FeatureExtractor.FEATURE_NAMES) != self.RAW_FEATURE_COUNT:
             raise RuntimeError(
                 "FeatureExtractor không khớp PersonalCalibration: "
                 f"{len(FeatureExtractor.FEATURE_NAMES)} != "
-                f"{self.FEATURE_COUNT}"
+                f"{self.RAW_FEATURE_COUNT}"
             )
 
         self.detector = PoseDetector(
@@ -56,14 +59,13 @@ class PostureInferenceEngine:
         )
 
         self.extractor = FeatureExtractor(
-            min_keypoint_confidence=0.30,
+            min_keypoint_confidence=0.35,
         )
 
-        # PersonalCalibration tự biết FEATURE_DIM = 29.
-        # inference chỉ cần truyền số mẫu calibration cần thu.
         self.calibrator = PersonalCalibration(
             target_samples=calibration_samples,
         )
+        self.representation_builder = RepresentationBuilder()
 
         self.predictor = PosturePredictor(
             model_path=model_path,
@@ -82,7 +84,7 @@ class PostureInferenceEngine:
     @property
     def is_calibrated(self) -> bool:
         """Cho biết Personal Baseline đã được tạo hay chưa."""
-        return self.calibrator.is_calibrated
+        return self.calibrator.is_ready
 
     @property
     def is_calibrating(self) -> bool:
@@ -121,10 +123,10 @@ class PostureInferenceEngine:
         Xử lý một frame webcam.
 
         Khi calibration:
-            Frame -> RAW[29] -> lưu calibration sample.
+            Frame -> RAW12 -> lưu calibration sample.
 
         Khi baseline đã sẵn sàng:
-            Frame -> RAW[29] -> DELTA[29] -> prediction.
+            Frame -> RAW12 + baseline -> REP13 -> prediction.
         """
         pose = self.detector.detect(frame_bgr)
 
@@ -167,19 +169,21 @@ class PostureInferenceEngine:
                 angles=angles,
             )
 
-        # V03: RAW -> DELTA.
-        delta_features = self.calibrator.transform(
-            raw_features
-        )
-
-        if delta_features is None:
+        baseline = self.calibrator.baseline
+        if baseline is None:
             raise RuntimeError(
-                "Không tạo được delta features từ raw features."
+                "Calibration đã sẵn sàng nhưng không có baseline RAW12."
             )
 
-        # PosturePredictor chỉ nhận DELTA[29].
+        rep_features = self.representation_builder.transform(
+            raw_features,
+            baseline,
+        )
+        if rep_features.shape != (self.REP_FEATURE_COUNT,):
+            raise RuntimeError(f"REP13 không đúng shape: {rep_features.shape}.")
+
         prediction = self.predictor.predict(
-            delta_features
+            rep_features
         )
 
         return {
@@ -233,7 +237,7 @@ class PostureInferenceEngine:
             }
 
         # add_sample() tự động compute baseline ở sample cuối.
-        if self.calibrator.is_calibrated:
+        if self.calibrator.is_ready:
             self._is_calibrating = False
 
             return {
@@ -255,7 +259,7 @@ class PostureInferenceEngine:
             "status": "CALIBRATING",
             "message": (
                 f"Đang calibration: "
-                f"{self.calibrator.collected_samples}/"
+                f"{self.calibrator.sample_count}/"
                 f"{self.calibration_samples}"
             ),
             "bbox": bbox,
@@ -292,10 +296,10 @@ class PostureInferenceEngine:
                 "RAW features phải là vector một chiều."
             )
 
-        if array.shape != (self.FEATURE_COUNT,):
+        if array.shape != (self.RAW_FEATURE_COUNT,):
             raise ValueError(
                 f"RAW features phải có shape "
-                f"({self.FEATURE_COUNT},), "
+                f"({self.RAW_FEATURE_COUNT},), "
                 f"nhưng nhận được {array.shape}."
             )
 
@@ -387,7 +391,7 @@ class PostureInferenceEngine:
         """
         Lấy một số góc RAW phục vụ hiển thị/debug.
 
-        DELTA dùng cho model.
+        REP13 dùng cho model.
         RAW angle dùng để thể hiện tư thế vật lý hiện tại.
         """
         feature_map = dict(
@@ -397,13 +401,7 @@ class PostureInferenceEngine:
             )
         )
 
-        angle_names = (
-            "shoulder_angle",
-            "head_body_angle",
-            "head_gravity_angle",
-            "eye_shoulder_angle",
-            "face_pitch_angle",
-        )
+        angle_names = tuple(FeatureExtractor.ANGLE_FEATURES)
 
         return {
             name: round(

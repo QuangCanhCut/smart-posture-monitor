@@ -7,11 +7,12 @@ Pipeline được test:
       -> PostureInferenceEngine
       -> PoseDetector
       -> FeatureExtractor
-      -> 29 RAW features
+      -> RAW12
       -> PersonalCalibration
-      -> 29 DELTA features
+      -> RepresentationBuilder
+      -> REP13
       -> PosturePredictor
-      -> XGBoost prediction
+      -> SVM RBF prediction
 
 Lưu ý:
 - Script này CHƯA dùng TemporalMonitor.
@@ -54,6 +55,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.inference import PostureInferenceEngine  # noqa: E402
+from src.posture_predictor import PosturePredictor  # noqa: E402
 
 
 DEFAULT_MODEL_PATH = PROJECT_ROOT / "models" / "best_model.joblib"
@@ -209,7 +211,7 @@ def print_startup_guide(calibration_samples: int) -> None:
     print("=" * 72)
     print()
     print("Pipeline:")
-    print("Webcam -> RAW[29] -> Personal Baseline -> DELTA[29] -> XGBoost")
+    print("Webcam -> RAW12 -> Personal Baseline -> REP13 -> SVM RBF")
     print()
     print("Lưu ý:")
     print("- Đây là raw frame-level prediction, CHƯA temporal smoothing.")
@@ -334,6 +336,19 @@ def run_webcam(
         cv2.destroyAllWindows()
 
 
+def run_artifact_check(model_path: Path, metadata_path: Path) -> None:
+    """Load canonical artifacts và predict REP13 mà không mở webcam."""
+    predictor = PosturePredictor(
+        model_path=model_path,
+        metadata_path=metadata_path,
+    )
+    smoke_rep13 = np.zeros(predictor.feature_count, dtype=np.float32)
+    prediction = predictor.predict(smoke_rep13)
+    print("[OK] Model và metadata tương thích với REP13.")
+    print(f"[OK] Feature count: {predictor.feature_count}")
+    print(f"[OK] Smoke prediction: {prediction}")
+
+
 # ============================================================
 # 4. CLI
 # ============================================================
@@ -387,6 +402,12 @@ def parse_args() -> argparse.Namespace:
         help="Không vẽ bbox/keypoints để giảm overhead.",
     )
 
+    parser.add_argument(
+        "--check-only",
+        action="store_true",
+        help="Chỉ kiểm tra model/metadata REP13, không mở webcam.",
+    )
+
     return parser.parse_args()
 
 
@@ -413,10 +434,17 @@ def main() -> None:
             f"Không tìm thấy training metadata:\n{metadata_path}"
         )
 
-    if yolo_path is not None and not yolo_path.is_file():
+    if not args.check_only and yolo_path is not None and not yolo_path.is_file():
         raise FileNotFoundError(
             f"Không tìm thấy YOLO model:\n{yolo_path}"
         )
+
+    if args.check_only:
+        run_artifact_check(
+            model_path=model_path,
+            metadata_path=metadata_path,
+        )
+        return
 
     run_webcam(
         camera_index=args.camera,

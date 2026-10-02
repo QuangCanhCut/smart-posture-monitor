@@ -1,607 +1,250 @@
+from __future__ import annotations
+
+from collections.abc import Mapping, Sequence
+from typing import Any
+
 import numpy as np
 
 
 class FeatureExtractor:
     """
-    Biến output của PoseDetector thành vector feature.
+    Trích xuất 12 RAW geometric features từ 6 keypoint.
 
-    Input:
-        pose_result = {
-            "person_confidence": float,
-            "bbox": [...],
-            "keypoints": {
-                "nose": [x, y, confidence],
-                "left_eye": [x, y, confidence],
-                "right_eye": [x, y, confidence],
-                "left_ear": [x, y, confidence],
-                "left_shoulder": [x, y, confidence],
-                "right_shoulder": [x, y, confidence]
-            }
-        }
-
-    Output:
-        numpy.ndarray shape (29,)
-
-    Nếu keypoint không đủ chất lượng:
-        return None
+    Chỉ đo hình học của frame hiện tại:
+    - Không trừ personal baseline.
+    - Không normalize bằng shoulder_width hiện tại.
+    - RepresentationBuilder sẽ xử lý delta / normalize / log-ratio.
     """
 
-    FEATURE_NAMES = [
-        "shoulder_angle",
-        "eye_shoulder_angle",
-        "eye_vertical_difference",
+    KEYPOINT_NAMES = (
+        "nose", "left_eye", "right_eye",
+        "left_ear", "left_shoulder", "right_shoulder",
+    )
 
-        "nose_x_body",
-        "nose_y_body",
+    # Thứ tự cố định của vector RAW12.
+    FEATURE_NAMES = (
+        "shoulder_roll_deg",
+        "eye_roll_deg",
+        "head_shoulder_roll_diff_deg",
+        "neck_pitch_deg",
+        "eye_center_x_px",
+        "eye_center_y_px",
+        "shoulder_center_x_px",
+        "eye_shoulder_vertical_gap_px",
+        "eye_shoulder_horizontal_offset_px",
+        "inter_eye_distance_px",
+        "ear_nose_horizontal_span_px",
+        "shoulder_width_px",
+    )
 
-        "eye_center_x_body",
-        "eye_center_y_body",
+    # Dùng ở RepresentationBuilder để áp đúng kiểu biến đổi.
+    ANGLE_FEATURES = FEATURE_NAMES[:4]
+    SPATIAL_FEATURES = FEATURE_NAMES[4:9]
+    SCALE_FEATURES = FEATURE_NAMES[9:]
 
-        "left_ear_x_body",
-        "left_ear_y_body",
+    def __init__(self, min_keypoint_confidence: float = 0.35) -> None:
+        if not 0.0 <= min_keypoint_confidence <= 1.0:
+            raise ValueError("min_keypoint_confidence must be in [0, 1].")
+        self.min_keypoint_confidence = float(min_keypoint_confidence)
 
-        "nose_eye_dx",
-        "nose_eye_dy",
+    @property
+    def feature_count(self) -> int:
+        return len(self.FEATURE_NAMES)
 
-        "eye_width_ratio",
-        "ear_eye_ratio",
-
-        "nose_shoulder_center_distance",
-        "eye_shoulder_center_distance",
-
-        "nose_shoulder_asymmetry",
-        "eye_shoulder_asymmetry",
-
-        "nose_ear_ratio",
-
-        "head_body_angle",
-        "head_gravity_angle",
-        "nose_gravity_angle",
-        "face_pitch_angle",
-
-        "eye_vertical_axis_offset",
-        "nose_vertical_axis_offset",
-
-        "head_mean_height",
-        "head_height_spread",
-
-        "nose_body_angle",
-        "ear_body_angle",
-        "head_axis_angle_spread"
-    ]
-
-    REQUIRED_KEYPOINTS = [
-        "nose",
-        "left_eye",
-        "right_eye",
-        "left_ear",
-        "left_shoulder",
-        "right_shoulder"
-    ]
-
-    def __init__(
+    def extract(
         self,
-        min_keypoint_confidence=0.35
-    ):
-        """
-        min_keypoint_confidence:
-            Confidence tối thiểu của từng keypoint.
+        pose_result: Mapping[str, Any] | Sequence[Any] | np.ndarray | None,
+    ) -> np.ndarray | None:
+        """Pose -> validate keypoint -> 4 nhóm công thức -> RAW12."""
+        p = self._parse_points(pose_result)
+        if p is None:
+            return None
 
-        Nếu một trong 6 keypoint thấp hơn ngưỡng
-        thì frame đó không được dùng tạo feature.
-        """
-
-        self.min_keypoint_confidence = (
-            min_keypoint_confidence
+        features = np.asarray(
+            (
+                *self._world_orientation(p),
+                *self._sagittal(p),
+                *self._spatial(p),
+                *self._perspective(p),
+            ),
+            dtype=np.float32,
         )
 
-    # =========================================================
-    # Utility
-    # =========================================================
+        if features.size != self.feature_count or not np.all(np.isfinite(features)):
+            return None
+        return features
 
-    @staticmethod
-    def _distance(point_a, point_b):
-        """Khoảng cách Euclidean giữa hai điểm."""
-        return float(np.linalg.norm(point_a - point_b))
+    def as_dict(self, features: Sequence[float] | np.ndarray) -> dict[str, float]:
+        """Đổi RAW12 sang dict để debug/log dễ đọc."""
+        vector = np.asarray(features, dtype=np.float64).reshape(-1)
+        if vector.size != self.feature_count:
+            raise ValueError(f"Expected {self.feature_count} features, got {vector.size}.")
+        return dict(zip(self.FEATURE_NAMES, vector.tolist()))
 
-    @staticmethod
-    def _normalize_line_angle(angle):
-        """Chuẩn hóa góc đường thẳng về [-90, 90]."""
-        while angle > 90:
-            angle -= 180
-        while angle <= -90:
-            angle += 180
-        return float(angle)
+    # ==========================================================
+    # NHÓM 1 — WORLD-FRAME ORIENTATION
+    # ==========================================================
 
-    @classmethod
-    def _line_angle_deg(cls, vector):
-        """Góc của một đường thẳng theo độ."""
-        angle = np.degrees(np.arctan2(vector[1], vector[0]))
-        return cls._normalize_line_angle(angle)
+    def _world_orientation(
+        self, p: dict[str, np.ndarray]
+    ) -> tuple[float, float, float]:
+        # RAW01: góc nghiêng vai so với trục ngang ảnh.
+        shoulder_roll = self._angle_deg(p["left_shoulder"], p["right_shoulder"])
 
-    @staticmethod
-    def _signed_angle_from_image_up(vector):
-        """
-        Góc có dấu giữa vector và phương thẳng đứng đi lên của ảnh.
+        # RAW02: góc nghiêng đầu, đo bằng đường nối hai mắt.
+        eye_roll = self._angle_deg(p["left_eye"], p["right_eye"])
 
-        OpenCV: +x sang phải, +y xuống dưới.
-        image-up = (0, -1).
+        # RAW03: đầu nghiêng khác thân bao nhiêu.
+        roll_diff = self._wrap_angle_deg(eye_roll - shoulder_roll)
 
-        0 độ  : vector hướng thẳng lên.
-        > 0   : vector lệch về bên phải ảnh.
-        < 0   : vector lệch về bên trái ảnh.
-        """
-        dx = float(vector[0])
-        up_component = float(-vector[1])
-        return float(np.degrees(np.arctan2(dx, up_component)))
+        return shoulder_roll, eye_roll, roll_diff
 
-    # =========================================================
-    # MAIN
-    # =========================================================
+    # ==========================================================
+    # NHÓM 2 — SAGITTAL / NECK FLEXION
+    # ==========================================================
 
-    def extract(self, pose_result):
-        """
-        Chuyển pose_result thành vector 29 features.
+    def _sagittal(self, p: dict[str, np.ndarray]) -> tuple[float]:
+        # RAW04: tai trái -> mũi làm proxy cho góc cúi/ngẩng đầu
+        # với camera khoảng 45° từ bên trái.
+        neck_pitch = self._angle_deg(p["left_ear"], p["nose"])
+        return (neck_pitch,)
 
-        Returns:
-            np.ndarray shape (29,) hoặc None nếu frame không hợp lệ.
-        """
+    # ==========================================================
+    # NHÓM 3 — SPATIAL DISPLACEMENT
+    # ==========================================================
 
-        # -----------------------------------------------------
-        # 1. Kiểm tra input
-        # -----------------------------------------------------
+    def _spatial(
+        self, p: dict[str, np.ndarray]
+    ) -> tuple[float, float, float, float, float]:
+        # Tâm mắt đại diện vị trí đầu; tâm vai đại diện thân trên.
+        eye_center = self._midpoint(p["left_eye"], p["right_eye"])
+        shoulder_center = self._midpoint(p["left_shoulder"], p["right_shoulder"])
+
+        # Y ảnh tăng từ trên xuống dưới.
+        vertical_gap = shoulder_center[1] - eye_center[1]
+
+        # Có dấu để giữ thông tin lệch trái/phải của đầu so với thân.
+        horizontal_offset = eye_center[0] - shoulder_center[0]
+
+        return (
+            float(eye_center[0]),          # RAW05
+            float(eye_center[1]),          # RAW06
+            float(shoulder_center[0]),     # RAW07
+            float(vertical_gap),           # RAW08
+            float(horizontal_offset),      # RAW09
+        )
+
+    # ==========================================================
+    # NHÓM 4 — PERSPECTIVE / DEPTH PROXY
+    # ==========================================================
+
+    def _perspective(
+        self, p: dict[str, np.ndarray]
+    ) -> tuple[float, float, float]:
+        # RAW10: scale biểu kiến của vùng mặt.
+        inter_eye_distance = self._distance(p["left_eye"], p["right_eye"])
+
+        # RAW11: chỉ lấy độ dài theo trục X tai trái - mũi.
+        ear_nose_span = abs(float(p["nose"][0] - p["left_ear"][0]))
+
+        # RAW12: chỉ là RAW feature, không dùng làm mẫu số ở đây.
+        shoulder_width = self._distance(p["left_shoulder"], p["right_shoulder"])
+
+        return inter_eye_distance, ear_nose_span, shoulder_width
+
+    # ==========================================================
+    # INPUT VALIDATION
+    # ==========================================================
+
+    def _parse_points(
+        self,
+        pose_result: Mapping[str, Any] | Sequence[Any] | np.ndarray | None,
+    ) -> dict[str, np.ndarray] | None:
         if pose_result is None:
             return None
 
-        keypoints = pose_result.get("keypoints")
-        if keypoints is None:
-            return None
+        # Hỗ trợ {"keypoints": ...}, dict trực tiếp hoặc array/list 6 điểm.
+        raw = (
+            pose_result.get("keypoints", pose_result)
+            if isinstance(pose_result, Mapping)
+            else pose_result
+        )
 
-        # -----------------------------------------------------
-        # 2. Kiểm tra đủ 6 keypoint + confidence + format
-        # -----------------------------------------------------
-        points = {}
-
-        for name in self.REQUIRED_KEYPOINTS:
-            if name not in keypoints:
+        if isinstance(raw, Mapping):
+            items = [raw.get(name) for name in self.KEYPOINT_NAMES]
+        else:
+            try:
+                if len(raw) < len(self.KEYPOINT_NAMES):
+                    return None
+                items = list(raw[: len(self.KEYPOINT_NAMES)])
+            except (TypeError, IndexError):
                 return None
 
-            point = np.asarray(keypoints[name], dtype=np.float64)
+        points: dict[str, np.ndarray] = {}
 
-            if point.ndim != 1 or point.shape[0] < 3:
+        for name, item in zip(self.KEYPOINT_NAMES, items):
+            parsed = self._parse_keypoint(item)
+            if parsed is None:
                 return None
 
-            if not np.all(np.isfinite(point)):
-                return None
-
-            x, y, confidence = point[:3]
-
-            if confidence < self.min_keypoint_confidence:
+            x, y, conf = parsed
+            if conf < self.min_keypoint_confidence:
                 return None
 
             points[name] = np.array([x, y], dtype=np.float64)
 
-        # -----------------------------------------------------
-        # 3. Lấy từng điểm
-        # -----------------------------------------------------
-        nose = points["nose"]
-        left_eye = points["left_eye"]
-        right_eye = points["right_eye"]
-        left_ear = points["left_ear"]
-        left_shoulder = points["left_shoulder"]
-        right_shoulder = points["right_shoulder"]
-
-        # -----------------------------------------------------
-        # 4. Shoulder center + width
-        # -----------------------------------------------------
-        shoulder_center = (left_shoulder + right_shoulder) / 2.0
-        shoulder_vector = right_shoulder - left_shoulder
-        shoulder_width = float(np.linalg.norm(shoulder_vector))
-
-        if shoulder_width < 1e-6:
+        # Hai mắt hoặc hai vai trùng nhau -> hình học không hợp lệ.
+        if self._distance(points["left_eye"], points["right_eye"]) <= 1e-6:
+            return None
+        if self._distance(points["left_shoulder"], points["right_shoulder"]) <= 1e-6:
             return None
 
-        # -----------------------------------------------------
-        # 5. Hệ tọa độ BODY gắn với hai vai
-        # -----------------------------------------------------
-        shoulder_axis = shoulder_vector / shoulder_width
+        return points
 
-        # Vector vuông góc với vai
-        up_axis = np.array(
-            [shoulder_axis[1], -shoulder_axis[0]],
-            dtype=np.float64,
-        )
-
-        # OpenCV y tăng xuống dưới -> ép up_axis hướng lên ảnh
-        if up_axis[1] > 0:
-            up_axis = -up_axis
-
-        def body_coordinate(point):
-            relative = (point - shoulder_center) / shoulder_width
-            body_x = np.dot(relative, shoulder_axis)
-            body_y = np.dot(relative, up_axis)
-            return float(body_x), float(body_y)
-
-        # -----------------------------------------------------
-        # 6. Eye center
-        # -----------------------------------------------------
-        eye_center = (left_eye + right_eye) / 2.0
-        eye_vector = right_eye - left_eye
-        eye_width = float(np.linalg.norm(eye_vector))
-
-        if eye_width < 1e-6:
+    @staticmethod
+    def _parse_keypoint(item: Any) -> tuple[float, float, float] | None:
+        """Chuẩn hóa một keypoint về (x, y, confidence)."""
+        if item is None:
             return None
 
-        # =====================================================
-        # FEATURE 1 - 18: giữ nguyên V1
-        # =====================================================
-
-        # 1. Shoulder angle
-        shoulder_angle = self._line_angle_deg(shoulder_vector)
-
-        # 2. Eye line relative to shoulder line
-        eye_angle = self._line_angle_deg(eye_vector)
-        eye_shoulder_angle = self._normalize_line_angle(
-            eye_angle - shoulder_angle
-        )
-
-        # 3. Eye vertical difference in BODY frame
-        eye_vertical_difference = float(
-            np.dot(eye_vector, up_axis) / shoulder_width
-        )
-
-        # 4 - 5. Nose BODY coordinate
-        nose_x_body, nose_y_body = body_coordinate(nose)
-
-        # 6 - 7. Eye center BODY coordinate
-        eye_center_x_body, eye_center_y_body = body_coordinate(eye_center)
-
-        # 8 - 9. Left ear BODY coordinate
-        left_ear_x_body, left_ear_y_body = body_coordinate(left_ear)
-
-        # 10 - 11. Nose relative to eye center in BODY frame
-        nose_eye_vector = nose - eye_center
-
-        nose_eye_dx = float(
-            np.dot(nose_eye_vector, shoulder_axis) / shoulder_width
-        )
-        nose_eye_dy = float(
-            np.dot(nose_eye_vector, up_axis) / shoulder_width
-        )
-
-        # 12. Eye width / shoulder width
-        eye_width_ratio = float(eye_width / shoulder_width)
-
-        # 13. Left ear -> left eye / shoulder width
-        ear_eye_ratio = (
-            self._distance(left_ear, left_eye) / shoulder_width
-        )
-
-        # 14. Nose -> shoulder center / shoulder width
-        nose_shoulder_center_distance = (
-            self._distance(nose, shoulder_center) / shoulder_width
-        )
-
-        # 15. Eye center -> shoulder center / shoulder width
-        eye_shoulder_center_distance = (
-            self._distance(eye_center, shoulder_center) / shoulder_width
-        )
-
-        # 16. Nose-shoulder asymmetry
-        nose_left_shoulder_distance = self._distance(nose, left_shoulder)
-        nose_right_shoulder_distance = self._distance(nose, right_shoulder)
-
-        nose_shoulder_asymmetry = float(
-            (
-                nose_left_shoulder_distance
-                - nose_right_shoulder_distance
-            )
-            / shoulder_width
-        )
-
-        # 17. Eye-center-shoulder asymmetry
-        eye_left_shoulder_distance = self._distance(
-            eye_center, left_shoulder
-        )
-        eye_right_shoulder_distance = self._distance(
-            eye_center, right_shoulder
-        )
-
-        eye_shoulder_asymmetry = float(
-            (
-                eye_left_shoulder_distance
-                - eye_right_shoulder_distance
-            )
-            / shoulder_width
-        )
-
-        # 18. Nose -> left ear / shoulder width
-        nose_ear_ratio = self._distance(nose, left_ear) / shoulder_width
-
-        # =====================================================
-        # FEATURE 19
-        # Head axis relative to body up-axis
-        # =====================================================
-
-        head_body_angle = float(
-            np.degrees(
-                np.arctan2(
-                    eye_center_x_body,
-                    eye_center_y_body
+        try:
+            if isinstance(item, Mapping):
+                x, y = float(item["x"]), float(item["y"])
+                conf = float(
+                    item.get("confidence", item.get("conf", item.get("score", 1.0)))
                 )
-            )
-        )
-
-        # =====================================================
-        # FEATURE 20
-        # Head axis relative to image vertical / gravity proxy
-        # =====================================================
-
-        head_vector = (
-            eye_center
-            -
-            shoulder_center
-        )
-
-        if np.linalg.norm(head_vector) < 1e-6:
+            else:
+                arr = np.asarray(item, dtype=np.float64).reshape(-1)
+                if arr.size < 2:
+                    return None
+                x, y = float(arr[0]), float(arr[1])
+                conf = float(arr[2]) if arr.size >= 3 else 1.0
+        except (TypeError, ValueError, KeyError):
             return None
 
-        head_gravity_angle = (
-            self._signed_angle_from_image_up(
-                head_vector
-            )
-        )
+        return (x, y, conf) if np.all(np.isfinite([x, y, conf])) else None
 
-        # =====================================================
-        # FEATURE 21
-        # Nose axis relative to image vertical / gravity proxy
-        # =====================================================
+    # ==========================================================
+    # GEOMETRY PRIMITIVES
+    # ==========================================================
 
-        nose_vector = (
-            nose
-            -
-            shoulder_center
-        )
+    @staticmethod
+    def _midpoint(a: np.ndarray, b: np.ndarray) -> np.ndarray:
+        """Trung điểm hai điểm 2D."""
+        return (a + b) * 0.5
 
-        if np.linalg.norm(nose_vector) < 1e-6:
-            return None
+    @staticmethod
+    def _distance(a: np.ndarray, b: np.ndarray) -> float:
+        """Khoảng cách Euclidean."""
+        return float(np.linalg.norm(b - a))
 
-        nose_gravity_angle = (
-            self._signed_angle_from_image_up(
-                nose_vector
-            )
-        )
+    @staticmethod
+    def _angle_deg(a: np.ndarray, b: np.ndarray) -> float:
+        """Góc vector a -> b so với trục X ảnh, đơn vị độ."""
+        dx, dy = b - a
+        return float(np.degrees(np.arctan2(dy, dx)))
 
-        # =====================================================
-        # FEATURE 22
-        # Face projected pitch angle
-        # =====================================================
-
-        if np.linalg.norm(nose_eye_vector) < 1e-6:
-            return None
-
-        face_pitch_angle = float(
-            np.degrees(
-                np.arctan2(
-                    nose_eye_dx,
-                    -nose_eye_dy
-                )
-            )
-        )
-
-        # =====================================================
-        # FEATURE 23
-        # Eye center offset from camera vertical axis
-        # through shoulder center
-        # =====================================================
-
-        eye_vertical_axis_offset = float(
-            (
-                eye_center[0]
-                -
-                shoulder_center[0]
-            )
-            /
-            shoulder_width
-        )
-
-        # =====================================================
-        # FEATURE 24
-        # Nose offset from camera vertical axis
-        # through shoulder center
-        # =====================================================
-
-        nose_vertical_axis_offset = float(
-            (
-                nose[0]
-                -
-                shoulder_center[0]
-            )
-            /
-            shoulder_width
-        )
-
-        # =====================================================
-        # FEATURE 25
-        # Mean normalized height of head landmarks
-        # =====================================================
-
-        head_heights = np.array(
-            [
-                nose_y_body,
-                eye_center_y_body,
-                left_ear_y_body
-            ],
-            dtype=np.float64
-        )
-
-        head_mean_height = float(
-            np.mean(
-                head_heights
-            )
-        )
-
-        # =====================================================
-        # FEATURE 26
-        # Spread of normalized head landmark heights
-        # =====================================================
-
-        head_height_spread = float(
-            np.std(
-                head_heights
-            )
-        )
-
-        # =====================================================
-        # FEATURE 27
-        # Nose axis relative to body up-axis
-        # =====================================================
-
-        nose_body_angle = float(
-            np.degrees(
-                np.arctan2(
-                    nose_x_body,
-                    nose_y_body
-                )
-            )
-        )
-
-        # =====================================================
-        # FEATURE 28
-        # Left ear axis relative to body up-axis
-        # =====================================================
-
-        ear_body_angle = float(
-            np.degrees(
-                np.arctan2(
-                    left_ear_x_body,
-                    left_ear_y_body
-                )
-            )
-        )
-
-        # =====================================================
-        # FEATURE 29
-        # Angular spread of eye / nose / ear head axes
-        # =====================================================
-
-        def angle_difference(angle_a, angle_b):
-            return (
-                (angle_a - angle_b + 180.0)
-                % 360.0
-                - 180.0
-            )
-
-        nose_angle_delta = angle_difference(
-            nose_body_angle,
-            head_body_angle
-        )
-
-        ear_angle_delta = angle_difference(
-            ear_body_angle,
-            head_body_angle
-        )
-
-        head_axis_angle_spread = float(
-            np.std(
-                np.array(
-                    [
-                        0.0,
-                        nose_angle_delta,
-                        ear_angle_delta
-                    ],
-                    dtype=np.float64
-                )
-            )
-        )
-
-        # =====================================================
-        # Final feature vector
-        # =====================================================
-
-        features = np.array(
-            [
-                shoulder_angle,
-                eye_shoulder_angle,
-                eye_vertical_difference,
-
-                nose_x_body,
-                nose_y_body,
-
-                eye_center_x_body,
-                eye_center_y_body,
-
-                left_ear_x_body,
-                left_ear_y_body,
-
-                nose_eye_dx,
-                nose_eye_dy,
-
-                eye_width_ratio,
-                ear_eye_ratio,
-
-                nose_shoulder_center_distance,
-                eye_shoulder_center_distance,
-
-                nose_shoulder_asymmetry,
-                eye_shoulder_asymmetry,
-
-                nose_ear_ratio,
-
-                head_body_angle,
-                head_gravity_angle,
-                nose_gravity_angle,
-                face_pitch_angle,
-
-                eye_vertical_axis_offset,
-                nose_vertical_axis_offset,
-
-                head_mean_height,
-                head_height_spread,
-
-                nose_body_angle,
-                ear_body_angle,
-                head_axis_angle_spread
-            ],
-            dtype=np.float32
-        )
-
-        # =====================================================
-        # Final validation
-        # =====================================================
-
-        if not np.all(
-            np.isfinite(features)
-        ):
-            return None
-
-        return features
-
-    # =========================================================
-    # Debug helper
-    # =========================================================
-
-    def to_dict(self, features):
-        """
-        Chuyển vector thành dictionary để dễ debug.
-        """
-
-        if features is None:
-            return None
-
-        if (
-            len(features)
-            !=
-            len(self.FEATURE_NAMES)
-        ):
-
-            raise ValueError(
-                "Số feature không hợp lệ"
-            )
-
-        return dict(
-            zip(
-                self.FEATURE_NAMES,
-                features.tolist()
-            )
-        )
+    @staticmethod
+    def _wrap_angle_deg(angle: float) -> float:
+        """Đưa góc về [-180, 180)."""
+        return float((angle + 180.0) % 360.0 - 180.0)

@@ -11,12 +11,12 @@ import pandas as pd
 
 class PosturePredictor:
     """
-    Wrapper dùng để dự đoán tư thế từ 29 Personal Baseline Delta features.
+    Wrapper dùng để dự đoán tư thế từ REP13.
 
     Trách nhiệm:
     - Load model và training metadata.
     - Kiểm tra contract của feature đầu vào.
-    - Nhận vector DELTA 29 chiều.
+    - Nhận vector REP13 đúng thứ tự đã dùng khi training.
     - Trả về label và probability.
 
     Không chịu trách nhiệm:
@@ -34,19 +34,26 @@ class PosturePredictor:
     ) -> None:
         self.metadata = self._load_metadata(metadata_path)
 
-        self.feature_columns = [
-            str(column)
-            for column in self.metadata["feature_columns"]
-        ]
+        feature_columns = (
+            self.metadata.get("rep_feature_names")
+            or self.metadata.get("feature_columns")
+        )
+        if not feature_columns:
+            raise RuntimeError(
+                "Metadata không chứa rep_feature_names/feature_columns."
+            )
+        self.feature_columns = [str(column) for column in feature_columns]
 
         self.feature_count = len(self.feature_columns)
 
+        label_to_id = (
+            self.metadata.get("class_mapping")
+            or self.metadata.get("label_to_id")
+            or {}
+        )
         raw_id_to_label = self.metadata.get("id_to_label") or {
             str(value): key
-            for key, value in self.metadata.get(
-                "label_to_id",
-                {},
-            ).items()
+            for key, value in label_to_id.items()
         }
 
         self.id_to_label = {
@@ -90,18 +97,17 @@ class PosturePredictor:
                 "Model đã load không có method predict()."
             )
 
-        if self.feature_count != 29:
+        if self.feature_count != 13:
             raise RuntimeError(
-                "Posture Predictor V03 yêu cầu đúng 29 features, "
+                "PosturePredictor V03 yêu cầu đúng 13 REP features, "
                 f"nhưng metadata chứa {self.feature_count}."
             )
 
         representation = self.metadata.get("representation")
 
-        if representation != "personal_baseline_delta":
+        if str(representation).upper() != "REP13":
             raise RuntimeError(
-                "Model hiện tại không được train bằng "
-                "Personal Baseline Delta."
+                "Model hiện tại không được train bằng REP13."
             )
 
         model_feature_count = getattr(
@@ -123,55 +129,55 @@ class PosturePredictor:
                 "Không tìm thấy label mapping trong metadata."
             )
 
-    def _validate_delta_features(
+    def _validate_rep_features(
         self,
-        delta_features: np.ndarray | list[float],
+        rep_features: np.ndarray | list[float],
     ) -> np.ndarray:
         """
-        Kiểm tra vector Personal Baseline Delta đầu vào.
+        Kiểm tra vector REP13 đầu vào.
 
         Vector hợp lệ:
         - Có đúng 1 chiều.
-        - Có đúng 29 giá trị.
+        - Có đúng 13 giá trị.
         - Không chứa NaN hoặc Infinity.
         """
         try:
             features = np.asarray(
-                delta_features,
+                rep_features,
                 dtype=np.float64,
             )
         except (TypeError, ValueError) as error:
             raise ValueError(
-                "Delta features phải là dữ liệu dạng số."
+                "REP13 features phải là dữ liệu dạng số."
             ) from error
 
         if features.ndim != 1:
             raise ValueError(
-                "Delta features phải là vector 1 chiều."
+                "REP13 features phải là vector 1 chiều."
             )
 
         if features.shape != (self.feature_count,):
             raise ValueError(
-                f"Expected {self.feature_count} delta features, "
+                f"Expected {self.feature_count} REP13 features, "
                 f"got shape {features.shape}."
             )
 
         if not np.isfinite(features).all():
             raise ValueError(
-                "Delta features chứa NaN hoặc Infinity."
+                "REP13 features chứa NaN hoặc Infinity."
             )
 
         return features
 
     def predict(
         self,
-        delta_features: np.ndarray | list[float],
+        rep_features: np.ndarray | list[float],
     ) -> dict[str, Any]:
         """
-        Dự đoán tư thế từ vector Personal Baseline Delta 29 chiều.
+        Dự đoán tư thế từ vector REP13.
         """
-        features = self._validate_delta_features(
-            delta_features
+        features = self._validate_rep_features(
+            rep_features
         )
 
         # Giữ đúng feature names/order giống lúc training.

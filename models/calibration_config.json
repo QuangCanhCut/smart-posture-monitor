@@ -1,8 +1,15 @@
 {
   "version": "V03",
-  "feature_mode": "personal_baseline_delta",
-  "feature_count": 29,
-  "baseline_statistic": "median",
+  "representation": "REP13",
+  "calibration_samples": 30,
   "baseline_scope": "recording_id",
-  "calibration_samples": 30
+  "sample_label": "correct",
+  "selection": "first_30_valid_correct_sorted_by_frame_index",
+  "exclude_calibration_frames_from_ml": true,
+  "excluded_persons": [
+    "person08",
+    "person11"
+  ],
+  "non_angle_statistic": "median",
+  "angle_statistic": "circular_median_like"
 }
