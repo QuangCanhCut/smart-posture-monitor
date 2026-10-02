@@ -107,7 +107,7 @@ Largest off-diagonal pair: actual `lean_right` → predicted `forward_slouch` (6
 
 Previous artifact: SVM_RBF with LOPO Macro F1 mean 0.909258; the old run excluded persons 08 and 11, so the difference is contextual and not a like-for-like improvement claim.
 
-Final cohort có LOPO Macro F1 mean 0,919948 (+0,010690), Correct F1 0,938104 (+0,028161) và worst-person Macro F1 0,671906 (+0,029708) so với artifact cũ. Các chênh lệch này không được diễn giải là cải thiện thuần túy vì cohort/dataset đã thay đổi.
+Final cohort có LOPO Macro Fz, Correct F1 0,938104 (+0,028161) và worst-person Macro F1 0,671906 (+0,029708) so với artifact cũ. Các chênh lệch này không được diễn giải là cải thiện thuần túy vì cohort/dataset đã thay đổi.
 
 ## 10. Kết luận
 
