@@ -6,10 +6,7 @@
   "sample_label": "correct",
   "selection": "first_30_valid_correct_sorted_by_frame_index",
   "exclude_calibration_frames_from_ml": true,
-  "excluded_persons": [
-    "person08",
-    "person11"
-  ],
+  "excluded_persons": [],
   "non_angle_statistic": "median",
   "angle_statistic": "circular_median_like"
 }

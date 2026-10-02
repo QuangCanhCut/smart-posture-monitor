@@ -1,48 +1,130 @@
 {
   "dataset_path": "data\\processed\\features.csv",
-  "samples": 4014,
+  "samples": 4456,
   "raw_feature_count": 12,
   "persons": 14,
   "recordings": 16,
   "classes": 4,
   "class_distribution": {
-    "correct": 1051,
-    "forward_slouch": 889,
-    "lean_left": 1054,
-    "lean_right": 1020
+    "correct": 1467,
+    "forward_slouch": 937,
+    "lean_left": 1024,
+    "lean_right": 1028
   },
   "person_distribution": {
-    "person01": 148,
-    "person02": 277,
-    "person03": 201,
-    "person04": 275,
-    "person05": 260,
-    "person06": 240,
-    "person07": 796,
-    "person08": 226,
-    "person09": 273,
-    "person10": 307,
-    "person11": 258,
-    "person12": 252,
-    "person13": 255,
-    "person14": 246
+    "person01": 168,
+    "person02": 301,
+    "person03": 230,
+    "person04": 304,
+    "person05": 289,
+    "person06": 269,
+    "person07": 884,
+    "person08": 263,
+    "person09": 303,
+    "person10": 340,
+    "person11": 255,
+    "person12": 284,
+    "person13": 287,
+    "person14": 279
+  },
+  "recording_distribution": {
+    "person01__session01": 168,
+    "person02__session01": 301,
+    "person03__session01": 230,
+    "person04__session01": 304,
+    "person05__session01": 289,
+    "person06__session01": 269,
+    "person07__session01": 326,
+    "person07__session02": 287,
+    "person07__session03": 271,
+    "person08__session01": 263,
+    "person09__session01": 303,
+    "person10__session01": 340,
+    "person11__session01": 255,
+    "person12__session01": 284,
+    "person13__session01": 287,
+    "person14__session01": 279
   },
   "missing_values": 0,
   "duplicate_rows": 0,
   "duplicate_image_paths": 0,
   "non_finite_raw_values": 0,
-  "rejected_total": 327,
+  "rejected_total": 358,
   "rejection_reasons": {
-    "low_keypoint_confidence": 327
+    "low_keypoint_confidence": 358
   },
-  "total_images": 4341,
+  "total_images": 4814,
   "eda_findings": {
     "all_recordings_calibratable": true,
     "calibration_frames_removed": 480,
-    "rep13_samples": 3534,
-    "raw_normalized_subject_spread_median": 0.6891022839114802,
-    "rep_normalized_subject_spread_median": 0.4536026120185852,
-    "pca_2d_explained_variance": 0.5363927483558655,
-    "angle_samples_near_boundary": 7374
+    "rep13_samples": 3976,
+    "raw_normalized_subject_spread_median": 0.632148648086023,
+    "rep_normalized_subject_spread_median": 0.41849350929260254,
+    "pca_2d_explained_variance": 0.5271499752998352,
+    "angle_samples_near_boundary": 8334,
+    "class_max_to_min_ratio_raw": 1.5656350053361794,
+    "recording_max_to_min_ratio_raw": 2.0238095238095237,
+    "top_pairwise_rep13_features": [
+      {
+        "pair": "correct vs forward_slouch",
+        "feature": "delta_eye_center_y_body",
+        "standardized_abs_median_gap": 1.386936068534851
+      },
+      {
+        "pair": "correct vs forward_slouch",
+        "feature": "head_drift_magnitude",
+        "standardized_abs_median_gap": 1.293213129043579
+      },
+      {
+        "pair": "correct vs forward_slouch",
+        "feature": "delta_eye_shoulder_horizontal_offset_body",
+        "standardized_abs_median_gap": 1.0748647451400757
+      },
+      {
+        "pair": "correct vs lean_left",
+        "feature": "head_drift_magnitude",
+        "standardized_abs_median_gap": 1.9605271816253662
+      },
+      {
+        "pair": "correct vs lean_left",
+        "feature": "delta_shoulder_center_x_body",
+        "standardized_abs_median_gap": 1.4421601295471191
+      },
+      {
+        "pair": "correct vs lean_left",
+        "feature": "delta_eye_center_x_body",
+        "standardized_abs_median_gap": 1.39642333984375
+      },
+      {
+        "pair": "correct vs lean_right",
+        "feature": "head_drift_magnitude",
+        "standardized_abs_median_gap": 1.4129999876022339
+      },
+      {
+        "pair": "correct vs lean_right",
+        "feature": "delta_eye_shoulder_vertical_gap_body",
+        "standardized_abs_median_gap": 1.2936320304870605
+      },
+      {
+        "pair": "correct vs lean_right",
+        "feature": "delta_eye_center_y_body",
+        "standardized_abs_median_gap": 1.2022511959075928
+      },
+      {
+        "pair": "lean_left vs lean_right",
+        "feature": "delta_shoulder_center_x_body",
+        "standardized_abs_median_gap": 2.251124382019043
+      },
+      {
+        "pair": "lean_left vs lean_right",
+        "feature": "delta_eye_center_x_body",
+        "standardized_abs_median_gap": 2.183098077774048
+      },
+      {
+        "pair": "lean_left vs lean_right",
+        "feature": "log_ratio_shoulder_width",
+        "standardized_abs_median_gap": 1.8278887271881104
+      }
+    ]
   }
 }
