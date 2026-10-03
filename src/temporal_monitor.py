@@ -33,7 +33,7 @@ Cách dùng:
 from __future__ import annotations
 
 from collections import Counter, deque
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Literal, Optional
 
 
@@ -83,9 +83,9 @@ class MonitorState:
     Có thể đọc để debug/logging.
     """
 
-    current_label: str = "correct"
-    raw_prediction: str = "correct"
-    smoothed_prediction: str = "correct"
+    current_label: str = "evaluating"
+    raw_prediction: Optional[str] = None
+    smoothed_prediction: str = "evaluating"
     is_head_turned: bool = False
     yaw_value: Optional[float] = None
     yaw_gated: bool = False
@@ -113,6 +113,8 @@ class TemporalMonitor:
         self,
         fps: int = 5,
         window_seconds: float = 5.0,
+        window_size: Optional[int] = None,
+        min_samples: int = 3,
         hysteresis_frames: int = 3,
         yaw_mode: Literal["conservative", "informative", "off"] = "conservative",
         yaw_low: float = DEFAULT_YAW_LOW,
@@ -157,13 +159,26 @@ class TemporalMonitor:
             raise ValueError(
                 f"hysteresis_frames phải >= 0, nhận được {hysteresis_frames}"
             )
+        if window_size is not None and window_size <= 0:
+            raise ValueError(
+                f"window_size phải > 0, nhận được {window_size}"
+            )
+        if min_samples <= 0:
+            raise ValueError(f"min_samples phải > 0, nhận được {min_samples}")
         if yaw_low >= yaw_high:
             raise ValueError(
                 f"yaw_low ({yaw_low}) phải < yaw_high ({yaw_high})"
             )
 
         self.fps = fps
-        self.window_size = max(1, int(fps * window_seconds))
+        # ``window_size`` is intended for realtime inference whose throughput is
+        # variable.  Omitting it preserves the legacy fps * seconds behaviour.
+        self.window_size = (
+            int(window_size)
+            if window_size is not None
+            else max(1, int(fps * window_seconds))
+        )
+        self.min_samples = min(min_samples, self.window_size)
         self.hysteresis_frames = hysteresis_frames
         self.yaw_mode = yaw_mode
         self.yaw_low = yaw_low
@@ -218,7 +233,7 @@ class TemporalMonitor:
         """
 
         if not self._window:
-            return self._state.current_label
+            return "evaluating"
 
         counter = Counter(self._window)
         max_count = counter.most_common(1)[0][1]
@@ -303,6 +318,13 @@ class TemporalMonitor:
         self._state.raw_prediction = raw_prediction
         self._state.yaw_value = face_rotation_proxy
 
+        # Invalid/control states must never contaminate the vote window.  Keep
+        # the last stable posture (or evaluating during startup).
+        if raw_prediction not in VALID_LABELS:
+            self._state.is_head_turned = False
+            self._state.yaw_gated = False
+            return self._state.current_label
+
         # --------------------------------------------------------
         # BƯỚC 1: Yaw Gating
         # --------------------------------------------------------
@@ -327,11 +349,25 @@ class TemporalMonitor:
         # --------------------------------------------------------
         self._window.append(raw_prediction)
 
+        # Do not claim the user is sitting correctly before enough valid model
+        # predictions have been observed.
+        if len(self._window) < self.min_samples:
+            self._state.smoothed_prediction = "evaluating"
+            return "evaluating"
+
         # --------------------------------------------------------
         # BƯỚC 3: Majority vote
         # --------------------------------------------------------
         candidate = self._majority_vote()
         self._state.smoothed_prediction = candidate
+
+        # Bootstrap the first stable label directly once the minimum sample
+        # count is reached. Hysteresis applies to subsequent transitions.
+        if self._state.current_label == "evaluating":
+            self._state.current_label = candidate
+            self._state.hysteresis_counter = 0
+            self._state.pending_label = None
+            return candidate
 
         # --------------------------------------------------------
         # BƯỚC 4: Hysteresis
@@ -348,6 +384,22 @@ class TemporalMonitor:
 
         window_list = list(self._window)
         counter = Counter(window_list) if window_list else {}
+        majority_count = max(counter.values(), default=0)
+        vote_confidence = (
+            majority_count / len(window_list)
+            if window_list and len(window_list) >= self.min_samples
+            else None
+        )
+        display_count = counter.get(self._state.current_label, 0)
+        display_confidence = (
+            display_count / len(window_list)
+            if (
+                window_list
+                and len(window_list) >= self.min_samples
+                and self._state.current_label in VALID_LABELS
+            )
+            else None
+        )
 
         return {
             "frame_count": self._state.frame_count,
@@ -360,6 +412,10 @@ class TemporalMonitor:
             "window_size": len(self._window),
             "window_max_size": self.window_size,
             "window_distribution": dict(counter),
+            "valid_samples": len(self._window),
+            "min_samples": self.min_samples,
+            "vote_confidence": vote_confidence,
+            "display_confidence": display_confidence,
             "hysteresis_counter": self._state.hysteresis_counter,
             "pending_label": self._state.pending_label,
         }

@@ -1,110 +1,188 @@
 # Smart Posture Monitor
 
-Smart Posture Monitor là hệ thống nhận diện tư thế ngồi từ ảnh hoặc webcam bằng YOLO Pose, đặc trưng hình học thủ công và mô hình Machine Learning cổ điển.
+Smart Posture Monitor là hệ thống giám sát tư thế ngồi theo thời gian thực, sử dụng **YOLO Pose** để trích xuất keypoints phần thân trên, kết hợp **Personal Calibration**, biểu diễn đặc trưng **REP13**, mô hình **SVM RBF** và **Temporal Smoothing** để nhận diện tư thế ổn định hơn trên webcam.
 
-Phiên bản hiện tại là **V03 — RAW12 + Personal Calibration + REP13**. Final FULL MODE đã hoàn tất trên dataset mới bằng **nested Leave-One-Person-Out (LOPO)**; model thắng là **SVM RBF**.
-
----
-
-## Trạng thái hiện tại
-
-- Geometry đầu vào: **RAW12**.
-- Baseline cá nhân: **30 frame `correct` cho từng recording**.
-- Representation cho model: **REP13**.
-- Evaluation chính: **nested LOPO theo `person_id`**.
-- Final cohort: **14 persons / 16 recordings**.
-- Model tốt nhất: **SVM RBF**.
-- LOPO Macro F1 mean: **0.919948**.
-- OOF Macro F1: **0.936299**.
-- Temporal smoothing chưa được tích hợp vào webcam demo.
-- `src/train.py` và `src/evaluate.py` vẫn là pipeline cũ, **chưa phải entry point production của V03 hiện tại**.
+Phiên bản hiện tại là **V03 — RAW12 + Personal Calibration + REP13 + Realtime Web Dashboard**.
 
 ---
 
-## Pipeline
+## 1. Trạng thái dự án
 
-### Realtime
+Dự án hiện đã hoàn thiện luồng chính của bài tập lớn:
+
+- Nhận diện người và 6 keypoints phần thân trên bằng YOLO Pose.
+- Trích xuất bộ đặc trưng hình học RAW12.
+- Hiệu chuẩn tư thế chuẩn theo từng người bằng 30 frame `correct`.
+- Chuyển `RAW12 + personal baseline` thành REP13.
+- Phân loại 4 tư thế bằng SVM RBF.
+- Temporal smoothing bằng sliding window + majority vote + hysteresis.
+- Yaw gating để hạn chế nhiễu khi người dùng quay đầu.
+- Dashboard web realtime bằng FastAPI + WebSocket.
+- Hiển thị skeleton, tư thế, confidence, góc sinh trắc học và thống kê phiên.
+- Cảnh báo sai tư thế dựa trên **thời gian thực**, không phụ thuộc FPS giả định.
+- Lưu lịch sử phiên, thống kê vi phạm và xuất báo cáo.
+- Runtime WebSocket sử dụng cơ chế **one-frame-in-flight / latest-frame-wins** để tránh backlog.
+
+### Kết quả model final
+
+| Metric | Giá trị |
+|---|---:|
+| Model | **SVM RBF** |
+| LOPO Macro F1 Mean | **0.919948** |
+| OOF Accuracy | **0.936871** |
+| OOF Balanced Accuracy | **0.936982** |
+| OOF Macro Precision | **0.937899** |
+| OOF Macro Recall | **0.936982** |
+| OOF Macro F1 | **0.936299** |
+
+Hyperparameters của model thắng:
 
 ```text
-Webcam frame
-  -> PoseDetector
-  -> 6 upper-body keypoints
-  -> FeatureExtractor
-  -> RAW12
-  -> PersonalCalibration (baseline RAW12)
-  -> RepresentationBuilder
-  -> REP13
-  -> PosturePredictor
-  -> SVM RBF
-  -> frame-level posture prediction
+C = 1
+gamma = 0.01
+class_weight = balanced
 ```
-
-### Research / Training
-
-```text
-data/processed/features.csv
-  -> prepare_raw_dataset()
-  -> validate 14 persons / 16 recordings
-  -> baseline riêng cho từng recording_id
-  -> loại 30 calibration frames khỏi tập ML
-  -> RAW12 + baseline -> REP13
-  -> outer LeaveOneGroupOut(person_id)
-  -> inner StratifiedGroupKFold(n_splits=4)
-  -> tune SVM / Random Forest / XGBoost / MLP
-  -> OOF evaluation
-  -> final grouped search + fit winner
-```
-
-Không còn exclusion `person08` / `person11` trong final retrain. Dataset mới sử dụng đầy đủ 14 người.
 
 ---
 
-## Supported Postures
+## 2. Bài toán
+
+Hệ thống nhận webcam từ góc máy khoảng **45° bên trái người dùng** và phân loại tư thế ngồi thành 4 lớp:
 
 | Label | Ý nghĩa |
 |---|---|
-| `correct` | Tư thế ngồi đúng/upright tương đối. |
-| `forward_slouch` | Cúi hoặc gù người về phía trước. |
-| `lean_left` | Nghiêng người/đầu sang trái. |
-| `lean_right` | Nghiêng người/đầu sang phải. |
+| `correct` | Tư thế ngồi đúng / tương đối thẳng |
+| `forward_slouch` | Cúi hoặc gù người về phía trước |
+| `lean_left` | Nghiêng người / đầu sang trái |
+| `lean_right` | Nghiêng người / đầu sang phải |
+
+Mục tiêu của V03 không chỉ là dự đoán từng frame, mà còn giảm ảnh hưởng khác biệt hình thể giữa người dùng bằng **Personal Calibration** và giảm hiện tượng nhảy nhãn bằng **TemporalMonitor**.
 
 ---
 
-## Camera Protocol
+## 3. Kiến trúc tổng thể
 
-Dataset hiện chủ yếu được thu với camera đặt khoảng **45° từ bên trái người dùng**. Webcam demo không mirror frame vì mirror có thể đảo ý nghĩa `lean_left` và `lean_right`.
+### 3.1. Realtime pipeline
 
-`src/pose_detector.py` dùng Ultralytics YOLO Pose và lấy 6 keypoints:
+```text
+Webcam
+  ↓
+Browser capture
+  ↓
+WebSocket (one frame in-flight)
+  ↓
+PoseDetector
+  ↓
+6 upper-body keypoints
+  ↓
+FeatureExtractor
+  ↓
+RAW12
+  ↓
+PersonalCalibration
+  ↓
+RepresentationBuilder
+  ↓
+REP13
+  ↓
+PosturePredictor
+  ↓
+SVM RBF
+  ↓
+Raw prediction
+  ↓
+TemporalMonitor
+  ├─ valid-label window
+  ├─ majority vote
+  ├─ hysteresis
+  └─ yaw gating
+  ↓
+Stable posture
+  ↓
+SessionStatistics
+  ↓
+WebSocket response
+  ↓
+Realtime Dashboard
+```
 
-- `nose`
-- `left_eye`
-- `right_eye`
-- `left_ear`
-- `left_shoulder`
-- `right_shoulder`
+### 3.2. Research / training pipeline
+
+```text
+data/processed/features.csv
+  ↓
+prepare_raw_dataset()
+  ↓
+validate persons / recordings
+  ↓
+30 correct frames tạo baseline cho từng recording
+  ↓
+loại calibration frames khỏi tập ML
+  ↓
+RAW12 + baseline → REP13
+  ↓
+outer Leave-One-Person-Out
+  ↓
+inner StratifiedGroupKFold
+  ↓
+SVM / Random Forest / XGBoost / MLP
+  ↓
+OOF evaluation
+  ↓
+final grouped search
+  ↓
+fit winner
+```
+
+Evaluation chính sử dụng **nested Leave-One-Person-Out (LOPO)** theo `person_id` để hạn chế subject leakage.
 
 ---
 
-## RAW12
+## 4. Camera protocol và keypoints
 
-`src/feature_extractor.py` chuyển pose thành 12 feature. Schema chính thức luôn lấy từ:
+Dataset và realtime demo được thiết kế chủ yếu cho camera đặt khoảng **45° từ bên trái người dùng**.
+
+Frame không nên bị mirror trong pipeline inference vì thao tác mirror có thể làm đảo ý nghĩa `lean_left` và `lean_right`.
+
+`PoseDetector` sử dụng 6 keypoints:
+
+```text
+nose
+left_eye
+right_eye
+left_ear
+left_shoulder
+right_shoulder
+```
+
+Right ear không được sử dụng do dễ bị che khuất ở góc camera hiện tại.
+
+---
+
+## 5. Feature representation
+
+### 5.1. RAW12
+
+`src/feature_extractor.py` chuyển pose thành 12 feature hình học.
+
+Schema chính thức lấy từ:
 
 ```python
 FeatureExtractor.FEATURE_NAMES
 ```
 
+Các nhóm feature chính:
+
 | Nhóm | Feature |
 |---|---|
-| Angle/orientation | `shoulder_roll_deg`, `eye_roll_deg`, `head_shoulder_roll_diff_deg` |
+| Angle / orientation | `shoulder_roll_deg`, `eye_roll_deg`, `head_shoulder_roll_diff_deg` |
 | Neck | `neck_pitch_deg` |
 | Spatial | `eye_center_x_px`, `eye_center_y_px`, `shoulder_center_x_px`, `eye_shoulder_vertical_gap_px`, `eye_shoulder_horizontal_offset_px` |
-| Perspective/depth proxy | `inter_eye_distance_px`, `ear_nose_horizontal_span_px`, `shoulder_width_px` |
+| Perspective / scale proxy | `inter_eye_distance_px`, `ear_nose_horizontal_span_px`, `shoulder_width_px` |
 
-RAW12 chỉ mô tả hình học frame hiện tại; không chứa personal delta và không normalize bằng shoulder width hiện tại.
+RAW12 mô tả hình học của frame hiện tại và chưa chứa personal delta.
 
----
-
-## Personal Calibration
+### 5.2. Personal Calibration
 
 Mỗi recording có baseline riêng:
 
@@ -113,116 +191,84 @@ recording_id = person_id + "__" + session_id
 CALIBRATION_SAMPLES = 30
 ```
 
-Protocol offline/realtime dùng chung `PersonalCalibration`:
+Quy trình:
 
-1. Thu các RAW12 sample ở tư thế `correct`.
-2. Sắp theo `frame_index` trong offline research.
-3. Lấy đúng 30 sample hợp lệ đầu tiên.
-4. Non-angle feature dùng median.
-5. Angle feature dùng circular median-like để xử lý đúng biên ±180°.
-6. Calibration frames chỉ tạo baseline, không được dùng để train hoặc score.
+1. Người dùng ngồi ở tư thế `correct`.
+2. Thu 30 RAW12 sample hợp lệ.
+3. Tạo baseline cá nhân.
+4. Các frame calibration chỉ dùng để tạo baseline, không dùng để train hoặc score.
+5. Realtime chỉ bắt đầu classification sau khi calibration hoàn thành.
 
-Final dataset có **16/16 recordings đủ 30 correct samples để calibration**.
+Trong final dataset, toàn bộ **16/16 recordings** đều đủ dữ liệu calibration.
 
----
+### 5.3. REP13
 
-## REP13
+`src/representation_builder.py` biến đổi:
 
-`src/representation_builder.py` biến đổi `RAW12 + baseline RAW12` thành REP13:
+```text
+RAW12 + baseline RAW12 → REP13
+```
+
+REP13 gồm:
 
 - 4 wrapped angle deltas;
-- 5 spatial deltas chia baseline shoulder width;
+- 5 spatial deltas được chuẩn hóa theo baseline shoulder width;
 - 3 scale log-ratios;
 - `head_drift_magnitude`.
 
-Schema chính thức:
+Schema chính thức lấy từ:
 
 ```python
 RepresentationBuilder.OUTPUT_FEATURE_NAMES
 ```
 
-Model chỉ nhận REP13, không học trực tiếp từ RAW12.
+Model production chỉ nhận **REP13**, không học trực tiếp từ RAW12.
 
-### EDA signal sau calibration
-
-Median normalized subject spread:
+EDA cho thấy median normalized subject spread giảm từ:
 
 ```text
-RAW12  = 0.632149
-REP13  = 0.418494
+RAW12 = 0.632149
+REP13 = 0.418494
 ```
-
-REP13 giảm đáng kể subject variation so với RAW12, hỗ trợ mục tiêu biểu diễn tư thế tương đối theo personal baseline.
-
-Một số feature phân tách nổi bật trong EDA:
-
-- `correct` vs `forward_slouch`: `delta_eye_center_y_body`
-- `correct` vs `lean`: `head_drift_magnitude`
-- `lean_left` vs `lean_right`: `delta_shoulder_center_x_body`
-
-PCA 2D giải thích khoảng **52.715%** phương sai và chỉ được dùng cho mục đích chẩn đoán, không dùng làm input production.
 
 ---
 
-## Dataset và Final Training Cohort
+## 6. Dataset
 
-Dataset source của lần FINAL RETRAIN:
+Dataset source của final retrain:
 
 | Thống kê | Giá trị |
 |---|---:|
-| Total images | 4.814 |
-| Valid samples | 4.456 |
+| Total images | 4,814 |
+| Valid samples | 4,456 |
 | Rejected samples | 358 |
-| Source persons | 14 |
-| Source recordings | 16 |
-| `correct` | 1.467 |
+| Persons | 14 |
+| Recordings | 16 |
+| `correct` | 1,467 |
 | `forward_slouch` | 937 |
-| `lean_left` | 1.024 |
-| `lean_right` | 1.028 |
+| `lean_left` | 1,024 |
+| `lean_right` | 1,028 |
 
-Toàn bộ 358 rejected samples có lý do:
+Toàn bộ 358 rejected samples có nguyên nhân:
 
 ```text
 low_keypoint_confidence
 ```
 
-Sau calibration:
+Sau khi loại 30 calibration frames của từng recording:
 
 | Thống kê | Giá trị |
 |---|---:|
 | Persons dùng cho LOPO | 14 |
 | Recordings | 16 |
 | Calibration frames bị loại | 480 |
-| REP13 samples được score | 3.976 |
+| REP13 samples được score | 3,976 |
 
-Dataset trong `data/` được giữ local và ignore bởi Git.
-
-### Recording structure
-
-```text
-person01__session01
-person02__session01
-person03__session01
-person04__session01
-person05__session01
-person06__session01
-person07__session01
-person07__session02
-person07__session03
-person08__session01
-person09__session01
-person10__session01
-person11__session01
-person12__session01
-person13__session01
-person14__session01
-```
-
-`person07` có 3 recording nhưng cả 3 luôn thuộc cùng `person_id` group trong LOPO, nên không tạo subject leakage.
+Dataset trong `data/` được giữ local và không bắt buộc commit lên Git.
 
 ---
 
-## FULL Nested LOPO Research
+## 7. Model training và evaluation
 
 Notebook source of truth:
 
@@ -230,7 +276,7 @@ Notebook source of truth:
 notebooks/02_training_experiments.ipynb
 ```
 
-Cấu hình final run:
+Cấu hình final:
 
 ```text
 TRAINING_MODE = FULL
@@ -240,14 +286,16 @@ INNER_SPLITS = 4
 RANDOM_STATE = 42
 
 outer CV = LeaveOneGroupOut(person_id)
-inner CV = StratifiedGroupKFold(n_splits=4, shuffle=True, random_state=42)
+inner CV = StratifiedGroupKFold(
+    n_splits=4,
+    shuffle=True,
+    random_state=42
+)
 
 selection metric = outer LOPO Macro F1 mean
 ```
 
-Mỗi outer fold giữ toàn bộ recording của một người ở held-out side. Inner search chỉ thấy outer-train persons.
-
-### Kết quả FULL MODE
+### So sánh model
 
 | Model | LOPO Macro F1 Mean | Std | Worst-person Macro F1 | Accuracy Mean | Correct F1 |
 |---|---:|---:|---:|---:|---:|
@@ -256,34 +304,7 @@ Mỗi outer fold giữ toàn bộ recording của một người ở held-out si
 | MLP | 0.899089 | 0.123974 | 0.618682 | 0.917051 | 0.939971 |
 | XGBoost | 0.873577 | 0.146456 | 0.631538 | 0.894725 | 0.909948 |
 
-Winner: **SVM RBF**
-
-```text
-C = 1
-gamma = 0.01
-class_weight = balanced
-```
-
-### Final SVM OOF Metrics
-
-| Metric | Giá trị |
-|---|---:|
-| OOF Accuracy | 0.936871 |
-| OOF Balanced Accuracy | 0.936982 |
-| OOF Macro Precision | 0.937899 |
-| OOF Macro Recall | 0.936982 |
-| OOF Macro F1 | 0.936299 |
-
-Lưu ý:
-
-- **LOPO Macro F1 mean = 0.919948** là metric chính dùng để chọn model.
-- **OOF Macro F1 = 0.936299** là Macro F1 tính trên toàn bộ OOF predictions gộp lại.
-
-Hai metric này có ý nghĩa khác nhau và không nên dùng thay thế cho nhau.
-
----
-
-## Per-Class Performance — Final SVM
+### Per-class performance — final SVM
 
 | Class | Precision | Recall | F1 | Support |
 |---|---:|---:|---:|---:|
@@ -292,140 +313,259 @@ Hai metric này có ý nghĩa khác nhau và không nên dùng thay thế cho nh
 | `lean_left` | 0.984064 | 0.964844 | 0.974359 | 1024 |
 | `lean_right` | 0.974166 | 0.880350 | 0.924885 | 1028 |
 
-### Confusion đáng chú ý
-
-Largest off-diagonal error:
+Confusion đáng chú ý nhất:
 
 ```text
-actual lean_right -> predicted forward_slouch: 69 samples
-```
-
-Các confusion chính:
-
-| Actual | Predicted | Count |
-|---|---|---:|
-| `lean_right` | `forward_slouch` | 69 |
-| `lean_right` | `correct` | 52 |
-| `forward_slouch` | `correct` | 48 |
-| `lean_left` | `forward_slouch` | 25 |
-| `forward_slouch` | `lean_right` | 18 |
-
-`lean_left` là class ổn định nhất; `lean_right` hiện là class có recall thấp nhất trong final SVM.
-
----
-
-## So sánh với artifact V03 trước
-
-Artifact trước:
-
-```text
-SVM RBF LOPO Macro F1 mean = 0.909258
-```
-
-Final artifact:
-
-```text
-SVM RBF LOPO Macro F1 mean = 0.919948
-```
-
-Một số chênh lệch:
-
-- LOPO Macro F1 mean: `+0.010690`
-- Correct F1: khoảng `+0.028161`
-- Worst-person Macro F1: khoảng `+0.029708`
-
-Tuy nhiên đây **không phải A/B comparison hoàn toàn tương đương**, vì dataset/cohort final đã thay đổi và run cũ từng exclude một số person. Không nên diễn giải toàn bộ mức tăng là do một thay đổi duy nhất.
-
----
-
-## Artifacts
-
-Research model FULL MODE:
-
-```text
-models/best_model_v03_rep13.joblib
-```
-
-Compatibility artifact:
-
-```text
-models/best_model.joblib
-```
-
-Metadata/config:
-
-```text
-models/training_metadata.json
-models/calibration_config.json
-```
-
-Artifact final đã được overwrite và smoke-tested với REP13 13 chiều.
-
-Kết quả chi tiết:
-
-```text
-results/v03_lopo/
-  calibration_audit.csv
-  eda_dataset_summary.json
-  lopo_model_summary.csv
-  lopo_fold_metrics.csv
-  lopo_oof_predictions.csv
-  per_person_metrics.csv
-  per_class_metrics.csv
-  svm_search_results.csv
-  random_forest_search_results.csv
-  xgboost_search_results.csv
-  mlp_search_results.csv
-  raw_feature_statistics.csv
-  rep13_feature_statistics.csv
-  confusion_matrix_<model>.png
-  confusion_matrix_normalized_<model>.png
+actual lean_right → predicted forward_slouch: 69 samples
 ```
 
 ---
 
-## Project Structure
+## 8. Temporal smoothing
+
+`src/temporal_monitor.py` xử lý hậu dự đoán, không yêu cầu retrain model.
+
+Runtime V03 sử dụng:
+
+```text
+window_size = 7
+min_samples = 3
+hysteresis_frames = 2
+yaw_mode = conservative
+```
+
+Chỉ 4 posture label hợp lệ được đưa vào smoothing window:
+
+```text
+correct
+forward_slouch
+lean_left
+lean_right
+```
+
+Các trạng thái như `no_person`, `evaluating`, `head_turned`, `low_confidence` không được đưa vào majority vote.
+
+Luồng xử lý:
+
+```text
+Raw prediction
+  ↓
+Valid-label deque
+  ↓
+Majority vote
+  ↓
+Hysteresis
+  ↓
+Stable posture
+```
+
+UI hiển thị `smoothed_label` thay vì raw prediction để hạn chế flickering.
+
+---
+
+## 9. Realtime WebSocket runtime
+
+Web dashboard sử dụng **FastAPI + WebSocket**.
+
+### Cơ chế chống backlog
+
+Frontend không gửi frame theo interval cố định nữa.
+
+```text
+capture newest frame
+  ↓
+send to backend
+  ↓
+wait for response
+  ↓
+capture newest frame
+  ↓
+send next frame
+```
+
+Tại mọi thời điểm chỉ có tối đa **1 frame inference đang xử lý**.
+
+Cơ chế này được gọi là:
+
+```text
+one-frame-in-flight
+latest-frame-wins
+```
+
+Nếu inference chậm, hệ thống bỏ qua frame cũ thay vì xếp hàng khiến skeleton bị delay tích lũy.
+
+### Tách capture và display
+
+Frontend sử dụng:
+
+- offscreen canvas để capture / encode frame gửi backend;
+- output canvas để render video và skeleton mới nhất.
+
+Video webcam render bằng `requestAnimationFrame()`, độc lập với tốc độ inference của model.
+
+### Metrics runtime
+
+Dashboard hiển thị:
+
+- AI result FPS thực;
+- WebSocket round-trip latency;
+- `server_processing_ms`;
+- stable posture;
+- display confidence;
+- 3 góc sinh trắc học;
+- ergonomics score;
+- số vi phạm;
+- thời gian phiên.
+
+---
+
+## 10. Session Statistics
+
+`src/session_statistics.py` sử dụng `time.monotonic()` cho logic thời gian realtime.
+
+Các thông tin chính:
+
+```text
+correct_seconds
+bad_seconds
+alert_count
+ergonomics_score
+```
+
+Cảnh báo sai tư thế sử dụng threshold theo **giây thực**.
+
+Một bad episode liên tục chỉ được tính là **một violation**. Khi posture trở lại `correct`, episode được reset.
+
+---
+
+## 11. Dashboard
+
+Web UI hiện hỗ trợ:
+
+### Tổng quan
+- webcam realtime;
+- skeleton 6 keypoints;
+- stable posture;
+- confidence;
+- FPS và latency;
+- ergonomics score;
+- thời gian phiên;
+- số cảnh báo;
+- 3 góc sinh trắc học;
+- gợi ý công thái học.
+
+### Analytics
+- tỷ lệ tư thế đúng / sai;
+- biểu đồ xu hướng theo phiên;
+- thống kê công thái học.
+
+### Session History
+- lưu lịch sử phiên trên browser;
+- số vi phạm;
+- timeline vi phạm;
+- lọc lịch sử;
+- xuất CSV / Excel.
+
+---
+
+## 12. Realtime states
+
+`PostureInferenceEngine` có các trạng thái chính:
+
+```text
+CALIBRATION_REQUIRED
+CALIBRATING
+CALIBRATED
+CALIBRATION_SAMPLE_REJECTED
+LOW_CONFIDENCE
+NO_PERSON
+OK
+```
+
+Nguyên tắc:
+
+- Không predict bằng RAW12 khi chưa calibration.
+- Calibration state không đi vào TemporalMonitor.
+- `NO_PERSON` không reset personal baseline.
+- `LOW_CONFIDENCE` không làm bẩn temporal window.
+- Baseline chỉ reset khi người dùng chủ động recalibrate.
+- Reset session chỉ reset temporal state và statistics.
+
+---
+
+## 13. Project structure
 
 ```text
 smart_posture_monitor/
-|-- app/
-|-- data/                              # Local dataset, ignored by Git
-|-- docs/
-|   `-- V03_RAW12_REP13_EDA_LOPO_Training_02-10-2026.md
-|-- models/
-|   |-- best_model.joblib             # Compatibility artifact
-|   |-- best_model_v03_rep13.joblib   # Current FULL research winner
-|   |-- calibration_config.json
-|   |-- training_metadata.json
-|   `-- yolo26n-pose.pt
-|-- notebooks/
-|   |-- 01_eda_dataset.ipynb
-|   `-- 02_training_experiments.ipynb
-|-- results/
-|   `-- v03_lopo/
-|-- scripts/
-|   |-- copy_rejected_images.py
-|   `-- test_webcam_model.py
-|-- src/
-|   |-- dataset_builder.py
-|   |-- feature_extractor.py
-|   |-- inference.py
-|   |-- personal_calibration.py
-|   |-- pose_detector.py
-|   |-- posture_predictor.py
-|   |-- preprocessing.py
-|   |-- representation_builder.py
-|   |-- session_statistics.py
-|   |-- temporal_monitor.py
-|   `-- train.py                       # Legacy; chưa migrate sang final V03
-|-- tests/
-|-- requirements.txt
-`-- README.md
+├── app/
+│   ├── app.py
+│   └── templates/
+│       └── index.html
+├── data/                              # Local dataset, ignored by Git
+├── docs/
+│   ├── V03_RAW12_REP13_EDA_LOPO_Training_02-10-2026.md
+│   └── V03_Runtime_WebSocket_Temporal_Statistics_04-10-2026.md
+├── models/
+│   ├── best_model.joblib
+│   ├── calibration_config.json
+│   ├── training_metadata.json
+│   └── yolo26n-pose.pt
+├── notebooks/
+│   ├── 01_eda_dataset.ipynb
+│   └── 02_training_experiments.ipynb
+├── results/
+│   └── v03_lopo/
+├── scripts/
+│   ├── copy_rejected_images.py
+│   └── test_webcam_model.py
+├── src/
+│   ├── dataset_builder.py
+│   ├── evaluate.py
+│   ├── feature_extractor.py
+│   ├── inference.py
+│   ├── personal_calibration.py
+│   ├── pose_detector.py
+│   ├── posture_predictor.py
+│   ├── preprocessing.py
+│   ├── representation_builder.py
+│   ├── session_statistics.py
+│   ├── temporal_monitor.py
+│   └── train.py
+├── tests/
+│   ├── test_temporal_monitor.py
+│   └── test_session_statistics.py
+├── requirements.txt
+└── README.md
 ```
 
 ---
 
-## Installation
+## 14. Module responsibilities
+
+| Module | Vai trò |
+|---|---|
+| `src/pose_detector.py` | Frame → selected person pose + 6 keypoints |
+| `src/feature_extractor.py` | Pose → RAW12 |
+| `src/personal_calibration.py` | 30 RAW12 correct samples → personal baseline |
+| `src/representation_builder.py` | RAW12 + baseline → REP13 |
+| `src/posture_predictor.py` | REP13 → raw class + probability |
+| `src/temporal_monitor.py` | Raw prediction → stable posture |
+| `src/session_statistics.py` | Time-based runtime statistics + violation episodes |
+| `src/inference.py` | Điều phối toàn bộ realtime pipeline |
+| `src/preprocessing.py` | Validate dataset và tạo input cho research pipeline |
+| `src/dataset_builder.py` | Raw images → RAW12 dataset + rejected audit |
+| `app/app.py` | FastAPI server + HTTP/WebSocket runtime |
+| `app/templates/index.html` | Dashboard realtime và browser-side runtime |
+
+---
+
+## 15. Cài đặt
+
+Khuyến nghị:
+
+```text
+Python 3.10 hoặc 3.11
+```
 
 Windows PowerShell:
 
@@ -435,15 +575,97 @@ python -m venv .venv
 pip install -r requirements.txt
 ```
 
-YOLO pose weights cần tồn tại local:
+Các model cần tồn tại trong:
 
 ```text
+models/best_model.joblib
+models/training_metadata.json
 models/yolo26n-pose.pt
 ```
 
 ---
 
-## EDA và Research
+## 16. Chạy Web Dashboard
+
+Từ thư mục root:
+
+```powershell
+python -m uvicorn app.app:app --reload
+```
+
+Mở trình duyệt:
+
+```text
+http://127.0.0.1:8000
+```
+
+Quy trình sử dụng:
+
+```text
+1. Bật webcam
+2. Ngồi đúng tư thế tự nhiên
+3. Nhấn C để bắt đầu Personal Calibration
+4. Giữ tư thế đến khi đủ 30 sample hợp lệ
+5. Hệ thống bắt đầu realtime posture monitoring
+```
+
+Phím tắt:
+
+| Phím | Chức năng |
+|---|---|
+| `C` | Bắt đầu calibration |
+| `R` | Reset session |
+| `Q` / `ESC` | Dừng webcam |
+
+---
+
+## 17. Realtime model test
+
+Kiểm tra model/metadata:
+
+```powershell
+python scripts/test_webcam_model.py `
+  --model models/best_model.joblib `
+  --check-only
+```
+
+Chạy webcam test:
+
+```powershell
+python scripts/test_webcam_model.py `
+  --model models/best_model.joblib `
+  --camera 0
+```
+
+---
+
+## 18. Tests
+
+Runtime tests:
+
+```powershell
+python -m pytest -q -p no:cacheprovider `
+  tests/test_temporal_monitor.py `
+  tests/test_session_statistics.py
+```
+
+Kết quả của runtime patch:
+
+```text
+10 passed in 0.02s
+```
+
+Kiểm tra thêm:
+
+```text
+python -m compileall -q src app
+```
+
+Một số test legacy của repository vẫn mô tả API từ các phiên bản RAW29 / DELTA29 trước V03 và có thể không còn khớp với pipeline final RAW12 / REP13.
+
+---
+
+## 19. Research / retraining
 
 Chạy notebook theo thứ tự:
 
@@ -452,149 +674,92 @@ Chạy notebook theo thứ tự:
 2. notebooks/02_training_experiments.ipynb
 ```
 
-Notebook 02 hiện chạy FULL MODE theo protocol final. Đây là nested search đầy đủ và có thể tốn nhiều thời gian/CPU.
+`02_training_experiments.ipynb` là source of truth cho final nested LOPO training.
 
-Không chạy:
+Không nên dùng:
 
-```text
+```powershell
 python -m src.train
 ```
 
-để tái tạo model REP13 hiện tại vì `src/train.py` chưa được migrate sang final V03 protocol.
+để tái tạo final REP13 artifact nếu `src/train.py` vẫn chưa được migrate hoàn toàn sang protocol research cuối cùng.
 
 ---
 
-## Realtime Test
+## 20. Validation
 
-Kiểm tra model/metadata không cần webcam:
-
-```powershell
-python scripts/test_webcam_model.py `
-  --model models/best_model_v03_rep13.joblib `
-  --check-only
-```
-
-Chạy webcam:
-
-```powershell
-python scripts/test_webcam_model.py `
-  --model models/best_model_v03_rep13.joblib `
-  --camera 0
-```
-
-Tùy chọn:
-
-```text
---no-pose
---calibration-samples 30
-```
-
-Controls:
-
-```text
-C      bắt đầu calibration mới
-R      reset và calibration lại
-Q/ESC  thoát
-```
-
-Khi calibration, người dùng cần ngồi ở tư thế `correct` tự nhiên cho đến khi đủ 30 RAW12 sample hợp lệ.
-
----
-
-## Module Responsibilities
-
-| Module | Vai trò |
-|---|---|
-| `src/pose_detector.py` | Frame → selected pose và 6 keypoints. |
-| `src/feature_extractor.py` | Pose → RAW12. |
-| `src/personal_calibration.py` | RAW12 correct samples → baseline RAW12. |
-| `src/representation_builder.py` | RAW12 + baseline → REP13. |
-| `src/posture_predictor.py` | REP13 → class label và probability. |
-| `src/inference.py` | Điều phối realtime detection, calibration, representation và prediction. |
-| `src/preprocessing.py` | Validate `features.csv`, tạo `X_raw/y/groups/metadata`. |
-| `src/dataset_builder.py` | Raw images → metadata + RAW12 và rejected audit. |
-
----
-
-## Realtime States
-
-`PostureInferenceEngine` trả về:
-
-```text
-CALIBRATION_REQUIRED
-CALIBRATING
-CALIBRATED
-LOW_CONFIDENCE
-NO_PERSON
-OK
-```
-
-Quy tắc:
-
-- Không predict bằng RAW12 trước calibration.
-- `NO_PERSON` không reset baseline.
-- `LOW_CONFIDENCE` không được thêm vào calibration buffer.
-- Baseline chỉ reset khi người dùng chủ động recalibrate.
-
----
-
-## Validation
-
-Final FULL run đã xác nhận:
+Final V03 đã xác nhận:
 
 - 14 persons / 16 recordings;
-- 56 outer-fold model records: `14 persons × 4 models`;
-- mỗi model có 3.976 OOF predictions;
+- 56 outer-fold model records = `14 persons × 4 models`;
+- mỗi model có 3,976 OOF predictions;
 - person overlap giữa train/test bằng 0;
-- cả 3 recording của `person07` luôn cùng group;
 - không calibration frame nào bị score;
-- 16/16 recordings calibratable;
-- model reload nhận đúng REP13 shape `(N, 13)`;
-- final winner là SVM RBF.
+- 16/16 recordings đủ dữ liệu calibration;
+- model reload nhận đúng input REP13 shape `(N, 13)`;
+- SVM RBF là model thắng;
+- runtime TemporalMonitor chỉ nhận 4 posture class hợp lệ;
+- runtime alert sử dụng thời gian thực;
+- WebSocket không còn tích lũy backlog frame;
+- reset session không xóa personal baseline.
 
-Kiểm tra trực tiếp artifact:
+---
 
-```powershell
-python scripts/test_webcam_model.py `
-  --model models/best_model_v03_rep13.joblib `
-  --check-only
+## 21. Current limitations
+
+- Camera protocol vẫn phụ thuộc tương đối vào góc đặt máy khoảng 45° bên trái.
+- Personal Calibration yêu cầu người dùng giữ tư thế `correct` ở đầu lần sử dụng.
+- Dataset giữa các subject chưa hoàn toàn cân bằng số recording.
+- Worst-person Macro F1 khoảng **0.6719**.
+- `lean_right` có recall khoảng **0.8804**, thấp nhất trong 4 class.
+- Hệ thống sử dụng pose 2D, chưa có depth/3D.
+- Runtime FPS vẫn phụ thuộc vào tốc độ YOLO Pose và phần cứng.
+- Cơ chế latest-frame-wins loại bỏ backlog nhưng không làm inference model nhanh hơn.
+- Một số legacy tests và entry point training cũ cần được migrate riêng sang V03 final protocol.
+
+---
+
+## 22. Hướng phát triển
+
+1. Tối ưu YOLO inference bằng GPU / runtime acceleration.
+2. Benchmark `imgsz` và resolution phù hợp cho realtime.
+3. Thu thêm dữ liệu từ nhiều người và nhiều setup camera hơn.
+4. Cân bằng số recording giữa các subject.
+5. Nghiên cứu camera scale compensation.
+6. Mở rộng dashboard với persistence phía server/database.
+7. Đóng gói project bằng Docker.
+8. Tách backend API để triển khai độc lập khi cần.
+9. Mở rộng từ single-user sang multi-person posture monitoring.
+
+---
+
+## 23. Tài liệu liên quan
+
+- `docs/V03_RAW12_REP13_EDA_LOPO_Training_02-10-2026.md`
+- `docs/V03_Runtime_WebSocket_Temporal_Statistics_04-10-2026.md`
+- `notebooks/01_eda_dataset.ipynb`
+- `notebooks/02_training_experiments.ipynb`
+- `results/v03_lopo/lopo_model_summary.csv`
+- `results/v03_lopo/lopo_fold_metrics.csv`
+- `results/v03_lopo/per_class_metrics.csv`
+- `results/v03_lopo/per_person_metrics.csv`
+
+---
+
+## 24. Phiên bản hiện tại
+
+```text
+Smart Posture Monitor V03
+
+YOLO Pose
++ RAW12
++ Personal Calibration
++ REP13
++ SVM RBF
++ Temporal Smoothing
++ Time-based Session Statistics
++ FastAPI / WebSocket
++ Realtime Dashboard
 ```
 
-Một số unit test cũ vẫn có thể mô tả API RAW29/DELTA29 và cần được migrate riêng; không dùng kết quả test legacy đó để kết luận về final V03 research pipeline.
-
----
-
-## Current Limitations
-
-- Camera protocol còn phụ thuộc góc đặt máy khoảng 45° bên trái.
-- Calibration yêu cầu người dùng giữ tư thế `correct` ở đầu session.
-- Số recording giữa các person chưa cân bằng; `person07` có 3 session.
-- Worst-person Macro F1 hiện khoảng **0.6719**, cho thấy generalization giữa từng người vẫn còn biến thiên.
-- `lean_right` có recall khoảng **0.8804**, thấp nhất trong 4 class của final SVM.
-- Model dùng pose 2D, chưa có depth/3D.
-- Frame-level prediction có thể jitter; `TemporalMonitor` chưa tích hợp vào webcam demo.
-- Production `src/train.py`, evaluation entry point và app final chưa được migrate đầy đủ sang final REP13 protocol.
-
----
-
-## Roadmap
-
-1. Chốt và merge V03 Final Retrain vào `master`.
-2. Viết lại `src/train.py` production theo RAW12 → Personal Calibration → REP13 và grouped protocol đã chốt.
-3. Cập nhật evaluation entry point và canonical deployment workflow.
-4. Kiểm thử webcam trên nhiều người và nhiều khoảng cách/camera setup hơn.
-5. Mở rộng dataset theo hướng cân bằng số recording giữa các person.
-6. Tích hợp `TemporalMonitor` và `SessionStatistics`.
-7. Hoàn thiện UI, cảnh báo realtime và dashboard.
-
----
-
-## Tài liệu liên quan
-
-- [Báo cáo V03 RAW12/REP13/LOPO](docs/V03_RAW12_REP13_EDA_LOPO_Training_02-10-2026.md)
-- [EDA notebook](notebooks/01_eda_dataset.ipynb)
-- [FULL training notebook](notebooks/02_training_experiments.ipynb)
-- [Model comparison](results/v03_lopo/lopo_model_summary.csv)
-- [LOPO fold metrics](results/v03_lopo/lopo_fold_metrics.csv)
-- [Per-class metrics](results/v03_lopo/per_class_metrics.csv)
-- [Per-person metrics](results/v03_lopo/per_person_metrics.csv)
+V03 là phiên bản hoàn chỉnh hiện tại của bài tập lớn, bao gồm cả **research/training pipeline** và **realtime web runtime**, đồng thời giữ nguyên model representation và evaluation protocol đã chốt.
