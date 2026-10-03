@@ -1649,6 +1649,8 @@
       const video = document.getElementById("webcam");
       const canvas = document.getElementById("output-canvas");
       const ctx = canvas.getContext("2d");
+      const captureCanvas = document.createElement("canvas");
+      const captureCtx = captureCanvas.getContext("2d");
       const btnToggleCam = document.getElementById("btn-toggle-cam");
       const btnCamPlaceholder = document.getElementById("btn-cam-placeholder");
       const btnCamText = document.getElementById("btn-cam-text");
@@ -1694,7 +1696,10 @@
       let stream = null;
       let ws = null;
       let isStreaming = false;
-      let captureInterval = null;
+      let frameInFlight = false;
+      let latestPoseResult = null;
+      let fpsWindowStart = performance.now();
+      let fpsResultCount = 0;
       let showSkeleton = true;
       let soundEnabled = true;
       let lastLoggedLabel = null;
@@ -2204,6 +2209,18 @@
         fetch("/api/reset_session", { method: "POST" });
 
         lastStatsData = {};
+        latestPoseResult = null;
+        fpsWindowStart = performance.now();
+        fpsResultCount = 0;
+        document.getElementById("metric-fps").innerText = "--";
+        document.getElementById("metric-ping").innerText = "-- ms";
+        document.getElementById("metric-prob").innerText = "--";
+        const postureBadge = document.getElementById("badge-posture");
+        postureBadge.className =
+          "inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg text-[11px] font-extrabold bg-slate-100 text-slate-700 border border-slate-300 shadow-2xs";
+        postureBadge.innerHTML =
+          '<span class="w-1.5 h-1.5 rounded-full bg-slate-500"></span> Chờ khởi động';
+        document.getElementById("invalid-banner").classList.add("hidden");
         postureChart.data.labels = [];
         postureChart.data.datasets[0].data = [];
         postureChart.data.datasets[1].data = [];
@@ -2220,6 +2237,8 @@
 
         localSessionSeconds = 0;
         currentSessionViolations = [];
+        lastViolationTime = 0;
+        lastLoggedLabel = null;
         sessionStartTime = null;
 
         document.getElementById("stat-session-time").innerText = "00:00:00";
@@ -2367,6 +2386,7 @@
             '<span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span><span>Hệ thống sẵn sàng</span>';
           connStatus.className =
             "inline-flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-bold rounded-full bg-white/95 text-emerald-800 border border-emerald-300 shadow-2xs";
+          sendFrame();
         };
 
         ws.onclose = () => {
@@ -2374,20 +2394,37 @@
             '<span class="w-1.5 h-1.5 rounded-full bg-slate-500"></span><span>Mất kết nối</span>';
           connStatus.className =
             "inline-flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-bold rounded-full bg-slate-100 text-slate-700 border border-slate-300";
+          frameInFlight = false;
           setTimeout(initWebSocket, 2000);
         };
 
         ws.onmessage = (event) => {
-          if (!isStreaming) return;
           const data = JSON.parse(event.data);
-          // Tính Ping Round-Trip chuẩn xác:
-          if (data.client_time) {
+          const isFrameResult = data.client_time !== undefined;
+          if (isFrameResult) {
+            frameInFlight = false;
             const ping = Math.round(performance.now() - data.client_time);
-            if (ping >= 0 && ping < 1500) {
+            if (ping >= 0) {
               document.getElementById("metric-ping").innerText = `${ping} ms`;
             }
+
+            if (data.status !== "ERROR") fpsResultCount++;
+            const now = performance.now();
+            const elapsed = now - fpsWindowStart;
+            if (elapsed >= 1000) {
+              const actualFps = (fpsResultCount * 1000) / elapsed;
+              document.getElementById("metric-fps").innerText =
+                actualFps.toFixed(1);
+              fpsWindowStart = now;
+              fpsResultCount = 0;
+            }
+
+            if (Object.prototype.hasOwnProperty.call(data, "keypoints")) {
+              latestPoseResult = data;
+            }
           }
-          updateUI(data);
+          if (isStreaming) updateUI(data);
+          if (isFrameResult) sendFrame();
         };
       }
 
@@ -2397,10 +2434,8 @@
             stream.getTracks().forEach((t) => t.stop());
             stream = null;
           }
-          if (captureInterval) {
-            clearInterval(captureInterval);
-            captureInterval = null;
-          }
+          latestPoseResult = null;
+          fpsResultCount = 0;
           if (sessionClockInterval) {
             clearInterval(sessionClockInterval);
             sessionClockInterval = null;
@@ -2435,9 +2470,12 @@
           video.onloadedmetadata = () => {
             canvas.width = video.videoWidth;
             canvas.height = video.videoHeight;
+            captureCanvas.width = video.videoWidth;
+            captureCanvas.height = video.videoHeight;
+            fpsWindowStart = performance.now();
+            fpsResultCount = 0;
+            sendFrame();
           };
-
-          captureInterval = setInterval(sendFrame, 66);
 
           if (!sessionClockInterval) {
             sessionClockInterval = setInterval(() => {
@@ -2455,15 +2493,44 @@
       btnCamPlaceholder.addEventListener("click", toggleCamera);
 
       function sendFrame() {
-        if (!isStreaming || !ws || ws.readyState !== WebSocket.OPEN) return;
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-        const b64 = canvas.toDataURL("image/jpeg", 0.55);
+        if (
+          frameInFlight ||
+          !isStreaming ||
+          !ws ||
+          ws.readyState !== WebSocket.OPEN ||
+          video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA ||
+          captureCanvas.width === 0 ||
+          captureCanvas.height === 0
+        )
+          return;
+        captureCtx.drawImage(
+          video,
+          0,
+          0,
+          captureCanvas.width,
+          captureCanvas.height,
+        );
+        const b64 = captureCanvas.toDataURL("image/jpeg", 0.55);
+        frameInFlight = true;
         ws.send(
           JSON.stringify({
             image: b64,
             client_time: performance.now(),
           }),
         );
+      }
+
+      function renderVideoFrame() {
+        if (
+          isStreaming &&
+          video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA &&
+          canvas.width > 0 &&
+          canvas.height > 0
+        ) {
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+          if (latestPoseResult) drawSkeleton(latestPoseResult);
+        }
+        requestAnimationFrame(renderVideoFrame);
       }
       // if (res.bbox) {
       //   const [x1, y1, x2, y2] = res.bbox;
@@ -2543,10 +2610,6 @@
       }
 
       function updateUI(res) {
-        if (isStreaming) {
-          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-          drawSkeleton(res);
-        }
         // [V03 MỚI] XỬ LÝ TIẾN TRÌNH HIỆU CHUẨN PERSONAL BASELINE
         const toast = document.getElementById("toast-calibrate");
         const toastText = document.getElementById("toast-calibrate-text");
@@ -2570,7 +2633,7 @@
           return;
         }
 
-        // 2. Nếu đang trong tiến trình thu 30 frame Baseline (15 FPS ~ 2s)
+        // 2. Nếu đang trong tiến trình thu đủ 30 mẫu Baseline
         if (res.status === "CALIBRATING") {
           if (toast && toastText) {
             toastText.innerText = `⏳ ${res.message || "Đang thu thập mốc chuẩn... Giữ nguyên tư thế ngồi thẳng!"}`;
@@ -2604,12 +2667,29 @@
         const stats = res.stats || {};
         lastStatsData = stats;
         const label = res.smoothed_label;
-        const hasData = (stats.total_frames || 0) > 0;
+        const validPostureLabels = new Set([
+          "correct",
+          "forward_slouch",
+          "lean_left",
+          "lean_right",
+        ]);
+        const neutralStatuses = new Set([
+          "LOW_CONFIDENCE",
+          "CALIBRATION_SAMPLE_REJECTED",
+          "CALIBRATED",
+          "ERROR",
+        ]);
+        const hasData =
+          (stats.correct_frames || 0) + (stats.bad_frames || 0) > 0;
 
-        if (isStreaming) {
+        if (
+          isStreaming &&
+          res.status === "OK" &&
+          validPostureLabels.has(label)
+        ) {
           if (label === "correct") {
             currentMinuteGoodFrames++;
-          } else if (label !== "no_person" && label !== "evaluating") {
+          } else {
             currentMinuteBadFrames++;
           }
         }
@@ -2670,7 +2750,7 @@
         }
 
         // 3. Thời gian phiên
-        const correctSec = Math.round((stats.correct_frames || 0) / 15);
+        const correctSec = Math.round(stats.correct_seconds || 0);
         document.getElementById("stat-correct-detail").innerText = hasData
           ? `${correctSec}s (${Math.round(scoreVal || 100)}%)`
           : "--";
@@ -2702,10 +2782,23 @@
 
         const isInvalid =
           res.is_valid === false ||
+          neutralStatuses.has(res.status) ||
+          !label ||
+          label === "evaluating" ||
+          label === "head_turned" ||
           label === "invalid" ||
           label === "unconfident";
 
-        if (isInvalid) {
+        if (res.status === "NO_PERSON" || label === "no_person") {
+          if (invalidBanner) invalidBanner.classList.add("hidden");
+          badgePosture.className =
+            "inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg text-[11px] font-extrabold bg-slate-100 text-slate-700 border border-slate-300 transition-all";
+          badgePosture.innerHTML =
+            '<span class="w-1.5 h-1.5 rounded-full bg-slate-500"></span> Trống';
+          alertBanner.classList.add("hidden");
+          tipText1.innerText =
+            "Hãy ngồi vào khung hình để camera bắt đầu nhận diện.";
+        } else if (isInvalid) {
           if (invalidBanner) invalidBanner.classList.remove("hidden");
           alertBanner.classList.add("hidden");
           badgePosture.className =
@@ -2723,16 +2816,7 @@
           alertBanner.classList.add("hidden");
           tipText1.innerText =
             "Tư thế rất tốt! Giữ vững khoảng cách mắt tới màn hình.";
-        } else if (label === "no_person") {
-          if (invalidBanner) invalidBanner.classList.add("hidden");
-          badgePosture.className =
-            "inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg text-[11px] font-extrabold bg-slate-100 text-slate-700 border border-slate-300 transition-all";
-          badgePosture.innerHTML =
-            '<span class="w-1.5 h-1.5 rounded-full bg-slate-500"></span> Trống';
-          alertBanner.classList.add("hidden");
-          tipText1.innerText =
-            "Hãy ngồi vào khung hình để camera bắt đầu nhận diện.";
-        } else {
+        } else if (validPostureLabels.has(label)) {
           if (invalidBanner) invalidBanner.classList.add("hidden");
           badgePosture.className =
             "inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg text-[11px] font-extrabold bg-rose-100 text-rose-800 border border-rose-300 shadow-2xs transition-all";
@@ -2796,8 +2880,10 @@
             Math.min(100, Math.max(0, 50 + Number(hb) * 2)) + "%";
         }
 
-        document.getElementById("metric-prob").innerText = res.probability
-          ? Math.round(res.probability * 100) + "%"
+        document.getElementById("metric-prob").innerText = Number.isFinite(
+          res.display_confidence,
+        )
+          ? Math.round(res.display_confidence * 100) + "%"
           : "--";
 
         // Ghi nhận sự kiện vi phạm vào danh sách chi tiết của phiên
@@ -2859,6 +2945,7 @@
       btnModalCsv.addEventListener("click", exportReportCSV);
 
       initWebSocket();
+      requestAnimationFrame(renderVideoFrame);
       renderHistoryUI(); // Khởi tạo danh sách lịch sử khi tải trang
 
       // Phím tắt Calibration & Điều khiển hệ thống
@@ -2898,9 +2985,6 @@
           }
         } else if (key === "R") {
           resetSessionData();
-          if (ws && ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify({ action: "reset_calibration" }));
-          }
         } else if (key === "Q" || e.key === "Escape") {
           if (isStreaming) {
             toggleCamera();

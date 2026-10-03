@@ -8,6 +8,7 @@ from __future__ import annotations
 import base64
 import json
 import sys
+import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Optional
@@ -32,9 +33,6 @@ MODEL_PATH = PROJECT_ROOT / "models" / "best_model.joblib"
 METADATA_PATH = PROJECT_ROOT / "models" / "training_metadata.json"
 YOLO_MODEL_PATH = PROJECT_ROOT / "models" / "yolo26n-pose.pt"
 
-# FPS chuẩn hóa theo luồng V03 (15 FPS = 30 frame thu trong 2s)
-FPS = 15
-
 APP_DIR = Path(__file__).resolve().parent
 TEMPLATES_DIR = APP_DIR / "templates"
 INDEX_HTML_PATH = TEMPLATES_DIR / "index.html"
@@ -53,7 +51,6 @@ def get_engine() -> PostureInferenceEngine:
             metadata_path=METADATA_PATH,
             yolo_path=YOLO_MODEL_PATH,
             calibration_samples=30,
-            fps=FPS,
         )
     return engine
 
@@ -119,30 +116,15 @@ async def set_alert_threshold(payload: AlertThresholdPayload):
     eng = get_engine()
     # 1. Giới hạn số giây hợp lệ (từ 1 đến 60 giây)
     seconds = max(1, min(payload.seconds, 60))
-    # 2. Tính số frame động theo fps của engine (15 FPS * seconds)
-    threshold_frames = int(seconds * getattr(eng, "fps", 15))
-    # 3. GÁN TRỰC TIẾP VÀO OBJECT STATS CỦA BACKEND
+    # The setting is wall-clock time; inference throughput is intentionally
+    # irrelevant here.
     if hasattr(eng, "stats"):
-        eng.stats.alert_threshold_frames = threshold_frames
-    # 4. Trả về đúng format để frontend index.html nhận và cập nhật UI
+        eng.stats.alert_threshold_seconds = float(seconds)
     return {
         "status": "OK",
         "seconds": seconds,
-        "threshold_frames": threshold_frames
+        "message": f"Cảnh báo sau {seconds} giây",
     }
-    
-    # Cập nhật an toàn nếu engine có chứa stats
-    if hasattr(eng, "stats") and hasattr(eng.stats, "alert_threshold_frames"):
-        eng.stats.alert_threshold_frames = threshold_frames
-
-    return JSONResponse(
-        {
-            "status": "OK",
-            "seconds": seconds,
-            "threshold_frames": threshold_frames,
-            "message": f"Cảnh báo sau {seconds} giây ({threshold_frames} frame)",
-        }
-    )
 
 
 @app.get("/api/info")
@@ -165,6 +147,7 @@ async def websocket_stream(websocket: WebSocket):
     try:
         while True:
             data = await websocket.receive_text()
+            client_time = None
             try:
                 msg = json.loads(data)
 
@@ -173,17 +156,40 @@ async def websocket_stream(websocket: WebSocket):
 
                 # Bắt tín hiệu Calibration từ frontend (khi ấn nút hoặc ấn phím C)
                 action = msg.get("action", "")
-                if action == "calibrate" and hasattr(eng, "start_calibration"):
-                    eng.start_calibration()
+                if action:
+                    if action == "calibrate":
+                        eng.start_calibration()
+                        await websocket.send_json({
+                            "status": "CALIBRATING",
+                            "message": "Đang bắt đầu thu thập mốc chuẩn cá nhân...",
+                            "calibrated": False,
+                            "calibration_progress": 0.0,
+                        })
+                    elif action == "reset_calibration":
+                        eng.reset_calibration()
+                        await websocket.send_json({
+                            "status": "CALIBRATION_REQUIRED",
+                            "message": "Đã xóa mốc chuẩn cá nhân",
+                            "calibrated": False,
+                            "calibration_progress": 0.0,
+                        })
+                    else:
+                        await websocket.send_json({
+                            "status": "ERROR",
+                            "message": f"Unknown action: {action}",
+                        })
+                    # Action-only messages are not image frames.
+                    continue
+
+                img_data = msg.get("image")
+                if not isinstance(img_data, str) or not img_data.strip():
                     await websocket.send_json({
-                        "status": "CALIBRATING",
-                        "message": "Đang bắt đầu thu thập mốc chuẩn cá nhân...",
-                        "calibrated": False,
-                        "calibration_progress": 0.0,
+                        "status": "ERROR",
+                        "message": "Missing image data",
+                        "client_time": client_time,
                     })
                     continue
 
-                img_data = msg.get("image", "")
                 if "," in img_data:
                     img_data = img_data.split(",", 1)[1]
                 img_bytes = base64.b64decode(img_data)
@@ -191,7 +197,12 @@ async def websocket_stream(websocket: WebSocket):
                 frame = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
 
                 if frame is not None:
+                    processing_started = time.perf_counter()
                     result = eng.process_frame(frame)
+                    result["server_processing_ms"] = round(
+                        (time.perf_counter() - processing_started) * 1000.0,
+                        1,
+                    )
 
                     # 2.Gắn ngược lại client_time vào kết quả trước khi gửi đi
                     if client_time is not None:
@@ -199,9 +210,16 @@ async def websocket_stream(websocket: WebSocket):
 
                     await websocket.send_json(result)
                 else:
-                    await websocket.send_json({"status": "ERROR", "message": "Frame decode failed"})
+                    await websocket.send_json({
+                        "status": "ERROR",
+                        "message": "Frame decode failed",
+                        "client_time": client_time,
+                    })
             except Exception as inner_e:
-                await websocket.send_json({"status": "ERROR", "message": str(inner_e)})
+                error_result = {"status": "ERROR", "message": str(inner_e)}
+                if client_time is not None:
+                    error_result["client_time"] = client_time
+                await websocket.send_json(error_result)
     except WebSocketDisconnect:
         pass
 

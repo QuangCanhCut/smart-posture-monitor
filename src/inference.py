@@ -11,7 +11,7 @@ from src.pose_detector import PoseDetector
 from src.posture_predictor import PosturePredictor
 from src.representation_builder import RepresentationBuilder
 from src.session_statistics import SessionStatistics
-from src.temporal_monitor import TemporalMonitor
+from src.temporal_monitor import VALID_LABELS, TemporalMonitor
 
 
 class PostureInferenceEngine:
@@ -52,15 +52,16 @@ class PostureInferenceEngine:
         self.calibration_samples = calibration_samples
         self._is_calibrating = False
 
-        # 2. Xử lý hậu dự đoán & Thống kê phiên thời gian thực (15 FPS)
+        # 2. Hậu xử lý realtime uses valid prediction counts, not nominal FPS.
         self.fps = fps
         self.temporal_monitor = TemporalMonitor(
             fps=fps,
-            window_seconds=3.0,       # Cửa sổ trượt 3 giây để triệt tiêu flickering
-            hysteresis_frames=4,       # Cần 4 frame ổn định liên tục để đổi trạng thái
-            yaw_mode="informative",   # Trả về nhãn 'head_turned' khi quay đầu
+            window_size=7,
+            min_samples=3,
+            hysteresis_frames=2,
+            yaw_mode="conservative",
         )
-        self.stats = SessionStatistics(alert_threshold_frames=int(fps * 2))  # 2 giây liên tục = 30 frame
+        self.stats = SessionStatistics(alert_threshold_seconds=2.0)
 
     # ============================================================
     # Calibration state
@@ -81,11 +82,15 @@ class PostureInferenceEngine:
     def start_calibration(self) -> None:
         """Bắt đầu thu 30 mẫu Personal Baseline mới."""
         self.calibrator.reset()
+        self.temporal_monitor.reset()
+        self.stats.update(None, status="CALIBRATING")
         self._is_calibrating = True
 
     def reset_calibration(self) -> None:
         """Xóa baseline và dừng calibration."""
         self.calibrator.reset()
+        self.temporal_monitor.reset()
+        self.stats.update(None, status="CALIBRATION_REQUIRED")
         self._is_calibrating = False
 
     def reset_session(self) -> None:
@@ -102,7 +107,6 @@ class PostureInferenceEngine:
 
         # 1. Không tìm thấy người
         if pose is None:
-            self.temporal_monitor.update("no_person")
             self.stats.update("no_person", status="NO_PERSON")
             return self._build_no_person_result()
 
@@ -112,7 +116,6 @@ class PostureInferenceEngine:
 
         # 2. Keypoints không đủ độ tin cậy
         if raw_features is None:
-            self.temporal_monitor.update("evaluating")
             self.stats.update("evaluating", status="LOW_CONFIDENCE")
             return self._build_low_confidence_result(bbox=bbox, keypoints=keypoints)
 
@@ -149,19 +152,28 @@ class PostureInferenceEngine:
         prediction = self.predictor.predict(rep_features)
         raw_label = prediction["raw_label"]
 
+        if raw_label not in VALID_LABELS:
+            self.stats.update(None, status="LOW_CONFIDENCE")
+            return self._build_low_confidence_result(
+                bbox=bbox,
+                keypoints=keypoints,
+            )
+
         # 6. Làm mượt bằng Temporal Smoothing + Yaw Gating
         smoothed_label = self.temporal_monitor.update(
             raw_prediction=raw_label,
             face_rotation_proxy=face_rotation_proxy,
         )
+        temporal_stats = self.temporal_monitor.get_stats()
 
         # 7. Thống kê phiên & Kích hoạt chuông còi cảnh báo
-        trigger_alert = self.stats.update(
-            label=smoothed_label,
-            status="OK",
-            alert_threshold_frames=self.stats.alert_threshold_frames,
-            debounce_seconds=4.0,
-        )
+        if (
+            smoothed_label in VALID_LABELS
+            and not temporal_stats["yaw_gated"]
+        ):
+            trigger_alert = self.stats.update(label=smoothed_label, status="OK")
+        else:
+            trigger_alert = self.stats.update(None, status="LOW_CONFIDENCE")
 
         return {
             "has_person": True,
@@ -174,6 +186,7 @@ class PostureInferenceEngine:
             "smoothed_label": smoothed_label,
             "label_id": prediction["label_id"],
             "probability": prediction["probability"],
+            "display_confidence": temporal_stats["display_confidence"],
             "trigger_alert": trigger_alert,
             "calibrated": True,
             "calibration_progress": 1.0,
@@ -194,6 +207,7 @@ class PostureInferenceEngine:
         accepted = self.calibrator.add_sample(raw_features)
 
         if not accepted:
+            self.stats.update(None, status="CALIBRATION_SAMPLE_REJECTED")
             return {
                 "has_person": True,
                 "status": "CALIBRATION_SAMPLE_REJECTED",
@@ -202,8 +216,10 @@ class PostureInferenceEngine:
                 "keypoints": keypoints,
                 "angles": angles,
                 "raw_label": None,
-                "smoothed_label": None,
+                "smoothed_label": "evaluating",
+                "label_id": None,
                 "probability": None,
+                "display_confidence": None,
                 "trigger_alert": False,
                 "calibrated": self.is_calibrated,
                 "calibration_progress": self.calibration_progress,
@@ -212,6 +228,7 @@ class PostureInferenceEngine:
 
         if self.calibrator.is_ready:
             self._is_calibrating = False
+            self.stats.update(None, status="CALIBRATED")
             return {
                 "has_person": True,
                 "status": "CALIBRATED",
@@ -220,14 +237,17 @@ class PostureInferenceEngine:
                 "keypoints": keypoints,
                 "angles": angles,
                 "raw_label": None,
-                "smoothed_label": None,
+                "smoothed_label": "evaluating",
+                "label_id": None,
                 "probability": None,
+                "display_confidence": None,
                 "trigger_alert": False,
                 "calibrated": True,
                 "calibration_progress": 1.0,
                 "stats": self.stats.to_dict(),
             }
 
+        self.stats.update(None, status="CALIBRATING")
         return {
             "has_person": True,
             "status": "CALIBRATING",
@@ -236,8 +256,10 @@ class PostureInferenceEngine:
             "keypoints": keypoints,
             "angles": angles,
             "raw_label": None,
-            "smoothed_label": None,
+            "smoothed_label": "evaluating",
+            "label_id": None,
             "probability": None,
+            "display_confidence": None,
             "trigger_alert": False,
             "calibrated": False,
             "calibration_progress": self.calibration_progress,
@@ -340,6 +362,7 @@ class PostureInferenceEngine:
             "smoothed_label": "no_person",
             "label_id": None,
             "probability": None,
+            "display_confidence": None,
             "trigger_alert": False,
             "calibrated": self.is_calibrated,
             "calibration_progress": self.calibration_progress,
@@ -355,8 +378,10 @@ class PostureInferenceEngine:
             "keypoints": keypoints,
             "angles": {},
             "raw_label": None,
-            "smoothed_label": None,
+            "smoothed_label": "evaluating",
+            "label_id": None,
             "probability": None,
+            "display_confidence": None,
             "trigger_alert": False,
             "calibrated": self.is_calibrated,
             "calibration_progress": self.calibration_progress,
@@ -377,8 +402,10 @@ class PostureInferenceEngine:
             "keypoints": keypoints,
             "angles": angles,
             "raw_label": None,
-            "smoothed_label": None,
+            "smoothed_label": "evaluating",
+            "label_id": None,
             "probability": None,
+            "display_confidence": None,
             "trigger_alert": False,
             "calibrated": False,
             "calibration_progress": self.calibration_progress,

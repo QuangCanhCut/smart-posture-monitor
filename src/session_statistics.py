@@ -5,13 +5,22 @@ from dataclasses import dataclass, field
 from typing import Any, Optional
 
 
+VALID_POSTURES = {"correct", "forward_slouch", "lean_left", "lean_right"}
+BAD_POSTURES = VALID_POSTURES - {"correct"}
+IGNORED_STATUSES = {
+    "CALIBRATING",
+    "CALIBRATION_REQUIRED",
+    "CALIBRATION_SAMPLE_REJECTED",
+    "CALIBRATED",
+    "LOW_CONFIDENCE",
+}
+
+
 @dataclass
 class SessionStatistics:
-    """
-    Quản lý thống kê phiên làm việc theo thời gian thực (chuẩn V03).
-    Tương thích với FeatureExtractor (RAW12), RepresentationBuilder (REP13)
-    và TemporalMonitor (gating head_turned).
-    """
+    """Frame counters plus monotonic, wall-clock posture durations."""
+
+    alert_threshold_seconds: float = 2.0
     start_time: Optional[float] = None
     total_frames: int = 0
     correct_frames: int = 0
@@ -20,17 +29,23 @@ class SessionStatistics:
     alert_count: int = 0
     consecutive_bad_frames: int = 0
     last_alert_time: float = 0.0
-
-    # Ngưỡng kích hoạt cảnh báo: 30 frame ở 15 FPS = 2 giây ngồi sai liên tục
-    alert_threshold_frames: int = 30
-
-    # Phân loại chi tiết vi phạm phục vụ biểu đồ và bộ lọc lỗi của dashboard
     slouch_frames: int = 0
     lean_left_frames: int = 0
     lean_right_frames: int = 0
+    correct_seconds: float = 0.0
+    bad_seconds: float = 0.0
+
+    _last_update_time: Optional[float] = field(default=None, init=False, repr=False)
+    _last_valid_label: Optional[str] = field(default=None, init=False, repr=False)
+    _bad_since: Optional[float] = field(default=None, init=False, repr=False)
+    _bad_episode_alerted: bool = field(default=False, init=False, repr=False)
+
+    def __post_init__(self) -> None:
+        if self.alert_threshold_seconds <= 0:
+            raise ValueError("alert_threshold_seconds phải lớn hơn 0.")
 
     def reset(self) -> None:
-        """Đặt lại toàn bộ trạng thái phiên về mốc khởi tạo."""
+        """Reset session data without touching personal calibration."""
         self.start_time = None
         self.total_frames = 0
         self.correct_frames = 0
@@ -42,91 +57,114 @@ class SessionStatistics:
         self.slouch_frames = 0
         self.lean_left_frames = 0
         self.lean_right_frames = 0
+        self.correct_seconds = 0.0
+        self.bad_seconds = 0.0
+        self._last_update_time = None
+        self._last_valid_label = None
+        self._bad_since = None
+        self._bad_episode_alerted = False
+
+    def _accumulate_duration(self, now: float) -> None:
+        if self._last_update_time is None:
+            return
+        delta = max(0.0, now - self._last_update_time)
+        if self._last_valid_label == "correct":
+            self.correct_seconds += delta
+        elif self._last_valid_label in BAD_POSTURES:
+            self.bad_seconds += delta
+
+    def _end_bad_episode(self) -> None:
+        self.consecutive_bad_frames = 0
+        self._bad_since = None
+        self._bad_episode_alerted = False
 
     def update(
         self,
         label: Optional[str],
         status: str = "OK",
-        alert_threshold_frames: Optional[int] = None,
-        debounce_seconds: float = 4.0,
+        alert_threshold_seconds: Optional[float] = None,
     ) -> bool:
-        """ 
-        Cập nhật thống kê frame.
-        - Bỏ qua khi hệ thống đang CALIBRATING hoặc CALIBRATION_REQUIRED.
-        - Trả về True nếu kích hoạt cảnh báo ngồi sai liên tục.
-        """
-        # Nếu đang trong quá trình thu 30 mẫu Personal Baseline thì không tính vào phiên
-        if status in ("CALIBRATING", "CALIBRATION_REQUIRED", "CALIBRATION_SAMPLE_REJECTED"):
-            return False
-        # Nếu đang trong quá trình thu 30 mẫu Personal Baseline thì không tính vào phiên
-        if status in ("CALIBRATING", "CALIBRATION_REQUIRED", "CALIBRATION_SAMPLE_REJECTED"):
+        """Update counters and return True once per continuous bad episode."""
+        now = time.monotonic()
+        self._accumulate_duration(now)
+
+        threshold = (
+            self.alert_threshold_seconds
+            if alert_threshold_seconds is None
+            else float(alert_threshold_seconds)
+        )
+        if threshold <= 0:
+            raise ValueError("alert_threshold_seconds phải lớn hơn 0.")
+
+        is_ignored = status in IGNORED_STATUSES
+        is_no_person = status == "NO_PERSON" or label == "no_person"
+        is_valid = status == "OK" and label in VALID_POSTURES
+
+        if is_ignored or not is_valid:
+            if is_no_person:
+                self.total_frames += 1
+                self.no_person_frames += 1
+            self._last_valid_label = None
+            self._last_update_time = now
+            self._end_bad_episode()
             return False
 
-        # ĐẢM BẢO SỐ FRAME LUÔN ĐƯỢC CẬP NHẬT ĐỘNG
-        if alert_threshold_frames is None:
-            alert_threshold_frames = self.alert_threshold_frames
-            
-        # Chỉ bắt đầu tính thời gian phiên khi xuất hiện frame nhận diện người hợp lệ đầu tiên
-        if self.start_time is None and label is not None and label not in ("no_person", "evaluating"):
-            self.start_time = time.time()
+        if self.start_time is None:
+            self.start_time = now
 
         self.total_frames += 1
-        trigger_alert = False
-        threshold = alert_threshold_frames or self.alert_threshold_frames
+        self._last_valid_label = label
+        self._last_update_time = now
 
-        # Xử lý các trạng thái không người, quay đầu hoặc đang chờ
-        if label is None or label in ("no_person", "evaluating", "head_turned"):
-            if label == "no_person":
-                self.no_person_frames += 1
-            self.consecutive_bad_frames = 0
-
-        elif label == "correct":
+        if label == "correct":
             self.correct_frames += 1
-            self.consecutive_bad_frames = 0
+            self._end_bad_episode()
+            return False
 
-        else:
-            # Ngồi sai tư thế (forward_slouch, lean_left, lean_right)
-            self.bad_frames += 1
-            self.consecutive_bad_frames += 1
+        self.bad_frames += 1
+        self.consecutive_bad_frames += 1
+        if label == "forward_slouch":
+            self.slouch_frames += 1
+        elif label == "lean_left":
+            self.lean_left_frames += 1
+        elif label == "lean_right":
+            self.lean_right_frames += 1
 
-            lbl_lower = label.lower()
-            if "slouch" in lbl_lower or "gù" in lbl_lower:
-                self.slouch_frames += 1
-            elif "left" in lbl_lower or "trái" in lbl_lower:
-                self.lean_left_frames += 1
-            elif "right" in lbl_lower or "phải" in lbl_lower:
-                self.lean_right_frames += 1
+        if self._bad_since is None:
+            self._bad_since = now
 
-            now = time.time()
-            if self.consecutive_bad_frames >= threshold:
-                if (now - self.last_alert_time) > debounce_seconds:
-                    self.alert_count += 1
-                    self.last_alert_time = now
-                    trigger_alert = True
-
-        return trigger_alert
+        if not self._bad_episode_alerted and now - self._bad_since >= threshold:
+            self._bad_episode_alerted = True
+            self.alert_count += 1
+            self.last_alert_time = now
+            return True
+        return False
 
     @property
     def elapsed_seconds(self) -> int:
         if self.start_time is None:
             return 0
-        return int(max(0.0, time.time() - self.start_time))
+        return int(max(0.0, time.monotonic() - self.start_time))
 
     @property
     def ergonomics_score(self) -> float:
+        valid_seconds = self.correct_seconds + self.bad_seconds
+        if valid_seconds > 0:
+            return round((self.correct_seconds / valid_seconds) * 100.0, 1)
         valid_frames = self.correct_frames + self.bad_frames
         if valid_frames == 0:
             return 100.0
         return round((self.correct_frames / valid_frames) * 100.0, 1)
 
     def to_dict(self) -> dict[str, Any]:
-        """Đóng gói dữ liệu thống kê trả về qua WebSocket cho frontend."""
         return {
             "elapsed_seconds": self.elapsed_seconds,
             "total_frames": self.total_frames,
             "correct_frames": self.correct_frames,
             "bad_frames": self.bad_frames,
             "no_person_frames": self.no_person_frames,
+            "correct_seconds": round(self.correct_seconds, 3),
+            "bad_seconds": round(self.bad_seconds, 3),
             "ergonomics_score": self.ergonomics_score,
             "alert_count": self.alert_count,
             "consecutive_bad_frames": self.consecutive_bad_frames,
