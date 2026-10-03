@@ -1,14 +1,33 @@
+# =========================
+# Computer Vision / AI
+# =========================
 ultralytics
 opencv-python
 numpy
-pandas
+
+# =========================
+# Machine Learning
+# =========================
 scikit-learn
-matplotlib
-xgboost
 joblib
+xgboost
+pandas
+
+# =========================
+# Web Application
+# =========================
+fastapi
+uvicorn[standard]
+pydantic
+
+# =========================
+# Training / Evaluation
+# =========================
+matplotlib
+imbalanced-learn
+
+# =========================
+# Development / Notebook
+# =========================
 ipykernel
 pytest
-tabulate
-imbalanced-learn
-nbformat
-nbclient

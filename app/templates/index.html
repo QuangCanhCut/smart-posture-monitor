@@ -1,0 +1,2993 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Smart Posture Monitor - Ergonomics Dashboard</title>
+    <link
+      rel="icon"
+      href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🐧</text></svg>"
+    />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Chart.js cho Posture Analytics -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+      @import url("https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap");
+      body {
+        font-family: "Plus Jakarta Sans", sans-serif;
+      }
+
+      /* ============================= */
+      /* DARK MODE                     */
+      /* ============================= */
+      body.dark-mode {
+        background-color: #0f172a;
+        color: #e2e8f0;
+      }
+
+      body.dark-mode .bg-white {
+        background-color: #1e293b !important;
+      }
+
+      body.dark-mode .bg-slate-50 {
+        background-color: #1e293b !important;
+      }
+
+      body.dark-mode .bg-slate-100 {
+        background-color: #334155 !important;
+      }
+
+      body.dark-mode .border-slate-100,
+      body.dark-mode .border-slate-200,
+      body.dark-mode .border-slate-300 {
+        border-color: #475569 !important;
+      }
+
+      body.dark-mode .text-slate-900 {
+        color: #f8fafc !important;
+      }
+
+      body.dark-mode .text-slate-800 {
+        color: #e2e8f0 !important;
+      }
+
+      body.dark-mode .text-slate-700 {
+        color: #cbd5e1 !important;
+      }
+
+      body.dark-mode .text-slate-600 {
+        color: #94a3b8 !important;
+      }
+
+      body.dark-mode .text-slate-500 {
+        color: #bac9de !important;
+      }
+
+      body.dark-mode header {
+        background: linear-gradient(
+          to right,
+          #0f172a,
+          #1e293b,
+          #172554
+        ) !important;
+        border-color: #334155 !important;
+      }
+
+      body.dark-mode aside {
+        background-color: #0b1120 !important;
+        border-color: #1e293b !important;
+      }
+
+      body.dark-mode .sidebar-btn {
+        color: #94a3b8 !important;
+      }
+
+      body.dark-mode .sidebar-btn:hover {
+        background-color: #1e293b !important;
+        color: #f8fafc !important;
+      }
+
+      body.dark-mode .sidebar-btn.active {
+        background-color: #1e293b !important;
+        color: #38bdf8 !important;
+        border-color: #38bdf8 !important;
+      }
+
+      body.dark-mode #btn-open-settings,
+      body.dark-mode #btn-sound-toggle,
+      body.dark-mode #btn-theme-toggle {
+        background-color: #1e293b !important;
+        color: #cbd5e1 !important;
+        border-color: #475569 !important;
+      }
+
+      body.dark-mode #btn-open-settings:hover,
+      body.dark-mode #btn-sound-toggle:hover,
+      body.dark-mode #btn-theme-toggle:hover {
+        background-color: #334155 !important;
+      }
+
+      body.dark-mode #btn-sound-toggle.bg-rose-50 {
+        background-color: rgba(244, 63, 94, 0.2) !important;
+        border-color: #f43f5e !important;
+      }
+
+      body.dark-mode #btn-sound-toggle.text-rose-500 {
+        color: #fb7185 !important;
+      }
+
+      body.dark-mode #chart-empty-placeholder {
+        background-color: rgba(15, 23, 42, 0.92) !important;
+      }
+      /* Tối ưu ô 'Điểm TB tốt nhất' khi ở chế độ Dark Mode */
+      body.dark-mode .bg-emerald-50\/70 {
+        background-color: rgba(
+          6,
+          78,
+          59,
+          0.35
+        ) !important; /* Nền xanh emerald đen tối sâu */
+        border-color: #059669 !important; /* Viền xanh ngọc đậm sắc nét */
+      }
+
+      body.dark-mode .bg-emerald-50\/70 span.text-emerald-700 {
+        color: #34d399 !important; /* Nhãn 'Điểm TB tốt nhất' sáng màu xanh ngọc */
+      }
+
+      body.dark-mode #hist-best-score {
+        color: #10b981 !important; /* Con số '--%' hoặc điểm số phát sáng xanh ngọc neon */
+      }
+
+      .custom-scrollbar::-webkit-scrollbar {
+        width: 5px;
+      }
+      .custom-scrollbar::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      .custom-scrollbar::-webkit-scrollbar-thumb {
+        background: #94a3b8;
+        border-radius: 9999px;
+      }
+      .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+        background: #64748b;
+      }
+
+      body.dark-mode input[type="number"] {
+        background-color: #334155 !important;
+        color: #ffffff !important;
+        border-color: #64748b !important;
+      }
+      body.dark-mode .model-name {
+        color: #4e4f50 !important;
+      }
+      body.dark-mode input[type="number"]:focus {
+        background-color: #3b4d66 !important;
+        border-color: #38bdf8 !important;
+      }
+
+      body.dark-mode div:has(> span > #metric-fps) {
+        background-color: #0b1120 !important;
+        border-color: #334155 !important;
+      }
+      body.dark-mode #metric-fps {
+        color: #34d399 !important;
+      }
+      body.dark-mode #metric-ping {
+        color: #33a9dc !important;
+      }
+      body.dark-mode button:hover,
+      body.dark-mode .cursor-pointer:hover {
+        background-color: #334155 !important;
+        color: #ffffff !important;
+      }
+      /* ĐỒNG BỘ Ô CHỌN NGÀY Ở DARK MODE */
+      body.dark-mode input[type="date"] {
+        background-color: #0b1120 !important;
+        color: #f1f5f9 !important;
+        border-color: #334155 !important;
+      }
+
+      /* Đổi màu icon lịch mặc định của trình duyệt sang màu sáng trên nền tối */
+      body.dark-mode input[type="date"]::-webkit-calendar-picker-indicator {
+        filter: invert(1) opacity(0.7);
+        cursor: pointer;
+      }
+      /* ======================================================== */
+      /* DARK MODE HI-CONTRAST: KHỬ HOÀN TOÀN MỜ ĐỤC             */
+      /* ======================================================== */
+      body.dark-mode {
+        background-color: #090d16 !important; /* Đen xanh than rất sâu */
+        color: #f1f5f9 !important;
+      }
+
+      /* Khung Card chính (Webcam, Posture Analytics, Cột phải) */
+      body.dark-mode .bg-white,
+      body.dark-mode aside,
+      body.dark-mode .rounded-2xl.border {
+        background-color: #0f172a !important; /* Slate-900 đen tuyền sạch */
+        border-color: #1e293b !important; /* Viền mờ sắc sảo, không bị chói trắng */
+      }
+
+      /* CÁC Ô CON BÊN TRONG: Thay vì dùng xám đục #334155, đổi sang nền tối sâu */
+      body.dark-mode .bg-slate-50,
+      body.dark-mode .bg-slate-100,
+      body.dark-mode .bg-slate-100\/90,
+      body.dark-mode .bg-slate-100\/80 {
+        background-color: #0b1120 !important; /* Nền tối sâu khử đục */
+        border-color: #243044 !important;
+      }
+
+      /* TẤT CẢ CÁC LOẠI CHỮ TRONG DARK MODE ĐƯỢC KÉO SÁNG RÕ */
+      body.dark-mode .text-slate-900,
+      body.dark-mode .text-slate-800 {
+        color: #ffffff !important; /* Trắng tinh */
+      }
+      body.dark-mode .text-slate-700,
+      body.dark-mode .text-slate-600,
+      body.dark-mode .text-slate-500 {
+        color: #cbd5e1 !important; /* Xám bạc sáng rõ nét, không bị chìm */
+      }
+      body.dark-mode .text-slate-400 {
+        color: #94a3b8 !important;
+      }
+
+      /* Ô FPS & PING (Góc webcam) - Rõ nét từng con số */
+      body.dark-mode div:has(> span > #metric-fps),
+      body.dark-mode #metric-badge-container {
+        background-color: #060a12 !important;
+        border: 1px solid #334155 !important;
+      }
+      body.dark-mode #metric-fps {
+        color: #34d399 !important; /* FPS xanh neon */
+      }
+      body.dark-mode #metric-ping {
+        color: #38bdf8 !important; /* Ping xanh dương */
+      }
+
+      /* KHỐI MODEL & PHÍM TẮT DƯỚI CHÂN WEBCAM */
+      body.dark-mode #info-model-label {
+        color: #34d399 !important;
+      }
+      body.dark-mode kbd {
+        background-color: #1e293b !important;
+        color: #ffffff !important;
+        border-color: #475569 !important;
+      }
+
+      /* KHỐI NHẬT KÝ & GỢI Ý */
+      body.dark-mode #log-container > div {
+        background-color: #0b1120 !important;
+        border-color: #1e293b !important;
+      }
+      body.dark-mode #log-container h4 {
+        color: #ffffff !important;
+      }
+      body.dark-mode #log-container p {
+        color: #cbd5e1 !important;
+      }
+      /* 1. Sửa thẻ phiên đang chọn ở Dark Mode: Nền xanh than tối sâu, viền sky nét */
+      body.dark-mode #history-session-list .border-sky-500 {
+        background-color: rgba(
+          14,
+          165,
+          233,
+          0.15
+        ) !important; /* Xanh sky tối mờ sang trọng */
+        border-color: #38bdf8 !important; /* Viền xanh sáng rõ */
+      }
+      body.dark-mode #history-session-list .border-sky-500 h4 {
+        color: #ffffff !important; /* Tiêu đề trắng tinh */
+      }
+      body.dark-mode #history-session-list .border-sky-500 p {
+        color: #94a3b8 !important; /* Dòng phụ xám bạc rõ nét */
+      }
+
+      /* 2. Sửa ô thông báo không có vi phạm ở Dark Mode: Nền ngọc tối, chữ xanh neon sáng rực */
+      body.dark-mode #history-detail-list .bg-emerald-50\/40 {
+        background-color: rgba(
+          6,
+          78,
+          59,
+          0.35
+        ) !important; /* Nền xanh ngọc tối sâu */
+        border-color: #059669 !important; /* Viền xanh ngọc đậm */
+        color: #34d399 !important; /* Chữ xanh neon nổi bật 100% */
+      }
+    </style>
+  </head>
+  <body
+    class="bg-[#f8fafc] text-slate-800 h-screen flex overflow-hidden antialiased selection:bg-indigo-500 selection:text-white"
+  >
+    <!-- ============================================== -->
+    <!-- 1. SIDEBAR ĐIỀU HƯỚNG BÊN TRÁI                -->
+    <!-- ============================================== -->
+    <aside
+      class="w-60 bg-white border-r border-slate-200 flex flex-col justify-between shrink-0 z-30 transition-all select-none"
+    >
+      <div>
+        <!-- Brand / Logo -->
+        <div
+          class="h-16 flex items-center gap-3 px-5 border-b border-slate-100"
+        >
+          <div
+            class="w-9 h-9 bg-gradient-to-tr from-sky-500 to-blue-600 text-white rounded-xl flex items-center justify-center shadow-md shadow-sky-200/60 text-xl shrink-0"
+          >
+            <span class="transform -translate-y-0.5">🐧</span>
+          </div>
+          <div class="overflow-hidden">
+            <h1
+              class="font-extrabold text-[15px] text-slate-900 tracking-tight truncate leading-tight"
+            >
+              Smart Posture
+            </h1>
+            <p class="text-[12px] text-slate-500 font-bold truncate">
+              AI Ergonomics
+            </p>
+          </div>
+        </div>
+
+        <!-- Menu chuyển Views -->
+        <nav class="p-3 space-y-1.5 text-[12.5px] font-extrabold">
+          <button
+            onclick="switchView('dashboard')"
+            id="nav-dashboard"
+            class="sidebar-btn active w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl border border-sky-500 bg-sky-50 text-sky-700 transition"
+          >
+            <i data-lucide="layout-dashboard" class="w-4 h-4 shrink-0"></i>
+            <span>Tổng quan</span>
+          </button>
+
+          <button
+            onclick="switchView('analytics')"
+            id="nav-analytics"
+            class="sidebar-btn w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl border border-transparent text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition"
+          >
+            <i data-lucide="bar-chart-2" class="w-4 h-4 shrink-0"></i>
+            <span>Phân tích & Biểu đồ</span>
+          </button>
+
+          <button
+            onclick="switchView('history')"
+            id="nav-history"
+            class="sidebar-btn w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl border border-transparent text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition"
+          >
+            <i data-lucide="history" class="w-4 h-4 shrink-0"></i>
+            <span>Lịch sử phiên</span>
+          </button>
+        </nav>
+      </div>
+
+      <!-- Footer Sidebar -->
+      <div
+        class="p-4 border-t border-slate-100 dark:border-slate-800 text-[12px] text-slate-500 space-y-2"
+      >
+        <div class="flex items-center justify-between font-bold">
+          <span class="text-slate-600 dark:text-slate-400">Phiên bản</span>
+          <span
+            class="text-sky-600 bg-sky-50 dark:bg-sky-950/50 dark:text-sky-300 px-2 py-0.5 rounded-md border border-sky-100 dark:border-sky-800 text-[11px]"
+            >v0.3 • YOLO</span
+          >
+        </div>
+
+        <!-- Ô badge phụ: Thu nhỏ font, căn vừa 1 dòng, không bị tràn phình to -->
+        <div
+          class="flex items-center justify-center gap-2 py-1.5 px-2.5 rounded-lg bg-sky-50 dark:bg-sky-950/40 border border-sky-200/80 dark:border-sky-800/60 text-[12px] font-extrabold text-sky-800 dark:text-sky-200 shadow-2xs"
+        >
+          <span
+            class="w-2 h-2 rounded-full bg-sky-500 animate-pulse shrink-0"
+          ></span>
+          <span class="tracking-tight">AI Posture Monitoring System</span>
+        </div>
+      </div>
+    </aside>
+
+    <!-- ============================================== -->
+    <!-- 2. KHU VỰC NỘI DUNG CHÍNH (HEADER + 3 VIEWS)    -->
+    <!-- ============================================== -->
+    <div class="flex-1 flex flex-col min-w-0 overflow-hidden">
+      <!-- Header thanh công cụ (Giữ nguyên cài đặt modal cũ) -->
+      <header
+        class="border-b border-slate-300 bg-gradient-to-r from-slate-100 via-sky-100/70 to-indigo-100/60 backdrop-blur-md h-16 shrink-0 flex items-center justify-between px-6 z-20 shadow-xs"
+      >
+        <div>
+          <h2
+            id="page-title"
+            class="font-bold text-[17px] text-slate-900 tracking-tight leading-none"
+          >
+            Tổng quan giám sát
+          </h2>
+          <p class="text-[12px] text-slate-600 mt-1 font-semibold">
+            Theo dõi góc vai, đầu và tư thế ngồi theo thời gian thực
+          </p>
+        </div>
+
+        <div class="flex items-center gap-2.5">
+          <div
+            id="connection-status"
+            class="inline-flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-bold rounded-full bg-white/95 text-emerald-800 border border-emerald-300 shadow-2xs"
+          >
+            <span
+              class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"
+            ></span>
+            <span>Hệ thống sẵn sàng</span>
+          </div>
+
+          <button
+            id="btn-open-settings"
+            title="Cài đặt hệ thống"
+            class="w-8 h-8 flex items-center justify-center text-slate-700 hover:text-slate-900 bg-white/90 border border-slate-300 rounded-lg hover:bg-slate-100 transition shadow-2xs cursor-pointer"
+          >
+            <i data-lucide="settings" class="w-4 h-4"></i>
+          </button>
+
+          <button
+            id="btn-sound-toggle"
+            title="Bật/Tắt chuông"
+            class="w-8 h-8 flex items-center justify-center text-slate-700 hover:text-slate-900 bg-white/90 border border-slate-300 rounded-lg hover:bg-slate-100 transition shadow-2xs cursor-pointer"
+          >
+            <i data-lucide="volume-2" class="w-4 h-4"></i>
+          </button>
+
+          <button
+            id="btn-theme-toggle"
+            title="Chuyển chế độ sáng/tối"
+            class="w-8 h-8 flex items-center justify-center text-slate-700 hover:text-slate-900 bg-white/90 border border-slate-300 rounded-lg hover:bg-slate-100 transition shadow-2xs cursor-pointer"
+          >
+            <i data-lucide="moon" class="w-4 h-4"></i>
+          </button>
+
+          <button
+            id="btn-reset"
+            title="Đặt lại phiên"
+            class="px-2.5 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:text-slate-900 hover:bg-slate-200/60 rounded-lg transition flex items-center gap-1.5 cursor-pointer border border-transparent hover:border-slate-300"
+          >
+            <i data-lucide="rotate-ccw" class="w-3.5 h-3.5 text-slate-600"></i>
+            <span>Đặt lại phiên</span>
+          </button>
+
+          <button
+            id="btn-end-session"
+            class="px-3.5 py-1.5 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-lg transition flex items-center gap-1.5 shadow-xs cursor-pointer active:scale-95"
+          >
+            <i data-lucide="square" class="w-3.5 h-3.5 fill-current"></i>
+            <span>Kết thúc phiên</span>
+          </button>
+        </div>
+      </header>
+
+      <!-- Nội dung cuộn chính -->
+      <main class="flex-1 overflow-y-auto p-6">
+        <!-- ============================================== -->
+        <!-- VIEW 1: 🏠 TỔNG QUAN (DASHBOARD)               -->
+        <!-- ============================================== -->
+        <section id="view-dashboard" class="max-w-7xl mx-auto">
+          <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+            <!-- CỘT TRÁI (8 CỘT): KHUNG WEBCAM LỚN 16:9 -->
+            <div class="lg:col-span-8 space-y-4">
+              <div
+                class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4 shadow-sm ..."
+              >
+                <div class="flex items-center justify-between">
+                  <div
+                    class="flex items-center gap-2 text-xs font-bold text-slate-800"
+                  >
+                    <span class="p-1 rounded bg-slate-100 text-slate-600">
+                      <i data-lucide="webcam" class="w-4 h-4"></i>
+                    </span>
+                    <span>Webcam AI Real-time (Góc máy 45°)</span>
+                  </div>
+                  <div
+                    class="flex items-center gap-2.5 text-[11px] font-mono text-slate-600 bg-slate-100/80 px-2.5 py-1 rounded-md border border-slate-200 font-bold"
+                  >
+                    <span class="flex items-center gap-1.5">
+                      <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+                      <span
+                        id="metric-fps"
+                        class="text-slate-900 font-extrabold"
+                        >--</span
+                      >
+                      FPS
+                    </span>
+                    <span class="text-slate-400">|</span>
+                    <span id="metric-ping" class="text-slate-700 model-name"
+                      >0 ms</span
+                    >
+                  </div>
+                </div>
+
+                <!-- Khung Video Camera tỉ lệ 16:9 -->
+                <div
+                  class="relative w-full bg-slate-950 rounded-xl aspect-video overflow-hidden flex items-center justify-center shadow-inner"
+                >
+                  <video
+                    id="webcam"
+                    autoplay
+                    playsinline
+                    muted
+                    class="hidden"
+                  ></video>
+                  <canvas
+                    id="output-canvas"
+                    class="w-full h-full object-cover"
+                  ></canvas>
+
+                  <div
+                    id="cam-placeholder"
+                    class="absolute inset-0 flex flex-col items-center justify-center text-center p-6 bg-gradient-to-b from-slate-900/95 to-slate-950 text-white z-10 backdrop-blur-xs"
+                  >
+                    <div
+                      class="w-14 h-14 rounded-2xl bg-white/10 border border-white/15 flex items-center justify-center mb-3 shadow-lg"
+                    >
+                      <i
+                        data-lucide="video-off"
+                        class="w-7 h-7 text-slate-300"
+                      ></i>
+                    </div>
+                    <p class="font-bold text-sm tracking-tight text-white">
+                      Camera đang ở trạng thái nghỉ
+                    </p>
+                    <p
+                      class="text-xs text-slate-300 mt-1.5 max-w-sm mb-5 leading-relaxed font-medium"
+                    >
+                      Hệ thống sẽ ước tính khung xương 6 điểm và theo dõi góc
+                      nghiêng vai, đầu để nhắc nhở tư thế.
+                    </p>
+                    <button
+                      id="btn-cam-placeholder"
+                      class="px-5 py-2.5 bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-500 hover:to-indigo-500 text-white text-xs font-bold rounded-xl shadow-lg shadow-sky-600/30 transition flex items-center gap-2 cursor-pointer active:scale-95"
+                    >
+                      <i data-lucide="play" class="w-4 h-4 fill-current"></i>
+                      Bật Webcam Ngay
+                    </button>
+                  </div>
+
+                  <!-- Banner cảnh báo đỏ -->
+                  <div
+                    id="alert-banner"
+                    class="hidden absolute top-4 inset-x-5 bg-gradient-to-r from-rose-600 to-red-600 text-white text-xs py-2.5 px-4 rounded-xl backdrop-blur-md flex items-center justify-between shadow-lg shadow-rose-600/30 border border-white/20 animate-pulse z-20"
+                  >
+                    <div class="flex items-center gap-2.5 font-bold">
+                      <i
+                        data-lucide="alert-triangle"
+                        class="w-4 h-4 text-amber-300"
+                      ></i>
+                      <span
+                        >Cảnh báo: Bạn đang ngồi sai tư thế liên tục! Hãy ngồi
+                        thẳng lưng lại.</span
+                      >
+                    </div>
+                  </div>
+                </div>
+                <!-- Banner cảnh báo vàng cam khi không nhận diện đủ cơ thể -->
+                <div
+                  id="invalid-banner"
+                  class="hidden absolute top-4 inset-x-5 bg-gradient-to-r from-amber-600 to-orange-600 text-white text-xs py-2.5 px-4 rounded-xl backdrop-blur-md flex items-center justify-between shadow-lg shadow-amber-600/30 border border-white/20 z-20"
+                >
+                  <div class="flex items-center gap-2.5 font-bold">
+                    <i data-lucide="scan" class="w-4 h-4 text-amber-200"></i>
+                    <span
+                      >⚠️ Không nhận diện đủ cơ thể. Vui lòng ngồi lại vào giữa
+                      khung hình.</span
+                    >
+                  </div>
+                </div>
+
+                <!-- Toast thông báo khi bấm phím C (Calibration) -->
+                <div
+                  id="toast-calibrate"
+                  class="hidden absolute top-4 inset-x-8 bg-gradient-to-r from-emerald-600 to-teal-600 text-white text-xs py-2.5 px-4 rounded-xl shadow-lg border border-white/20 flex items-center justify-between z-30 transition-all duration-300"
+                >
+                  <div class="flex items-center gap-2 font-bold">
+                    <i
+                      data-lucide="check-circle"
+                      class="w-4 h-4 text-emerald-200"
+                    ></i>
+                    <span id="toast-calibrate-text"
+                      >Đã ghi nhận tư thế hiện tại làm mốc chuẩn
+                      (Baseline)!</span
+                    >
+                  </div>
+                </div>
+
+                <!-- Footer nút camera & Tên model & Phím tắt -->
+                <div class="pt-3 border-t border-slate-200 text-xs">
+                  <div
+                    class="flex items-center justify-between flex-wrap gap-2"
+                  >
+                    <div class="flex items-center gap-2">
+                      <button
+                        id="btn-toggle-cam"
+                        class="px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold flex items-center gap-2 transition shadow-xs cursor-pointer active:scale-95"
+                      >
+                        <i data-lucide="camera" class="w-4 h-4"></i>
+                        <span id="btn-cam-text">Bật Webcam</span>
+                      </button>
+                      <button
+                        id="btn-toggle-skeleton"
+                        class="px-3.5 py-2 rounded-xl border border-slate-300 text-slate-700 hover:bg-slate-100 hover:text-slate-900 font-bold flex items-center gap-1.5 transition cursor-pointer"
+                      >
+                        <i
+                          data-lucide="spline"
+                          class="w-4 h-4 text-slate-600"
+                        ></i>
+                        <span id="btn-skeleton-text">Ẩn Khung xương</span>
+                      </button>
+                    </div>
+
+                    <div
+                      class="flex items-center gap-2 text-slate-600 font-bold bg-slate-100/90 px-3 py-1.5 rounded-lg border border-slate-200"
+                    >
+                      <i data-lucide="cpu" class="w-4 h-4 text-indigo-600"></i>
+                      <span
+                        class="font-black tracking-wide text-slate-800 dark:text-white uppercase text-[10px]"
+                        >Model:
+                        <strong
+                          id="info-model-label"
+                          class="text-slate-900 font-extrabold model-name text-[10px]"
+                          >SVM RBF</strong
+                        ></span
+                      >
+                    </div>
+                  </div>
+
+                  <div
+                    class="flex items-center gap-1.5 mt-3 ml-1 text-[12px] font-mono font-bold text-slate-500"
+                  >
+                    <span class="mr-3">Phím tắt:</span>
+                    <kbd
+                      class="px-1 py-0.5 bg-slate-100 rounded border border-slate-300 text-slate-800"
+                      >C</kbd
+                    >
+                    <span>Căn chỉnh (Calibrate)</span>
+                    <span class="text-slate-300">•</span>
+                    <kbd
+                      class="px-1 py-0.5 bg-slate-100 rounded border border-slate-300 text-slate-800"
+                      >R</kbd
+                    >
+                    <span>Đặt lại</span>
+                    <span class="text-slate-300">•</span>
+                    <kbd
+                      class="px-1 py-0.5 bg-slate-100 rounded border border-slate-300 text-slate-800"
+                      >Q</kbd
+                    >
+                    <span>/</span>
+                    <kbd
+                      class="px-1 py-0.5 bg-slate-100 rounded border border-slate-300 text-slate-800"
+                      >Esc</kbd
+                    >
+                    <span>Dừng</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- CỘT PHẢI (4 CỘT): 4 KPI -> SINH TRẮC HỌC -> GỢI Ý CÔNG THÁI HỌC -->
+            <div class="lg:col-span-4 space-y-4">
+              <!-- 1. Ma trận 4 thẻ chỉ số 2x2 -->
+              <div class="grid grid-cols-2 gap-2.5">
+                <!-- Thẻ 1: Tư thế -->
+                <div
+                  class="bg-white p-3 rounded-2xl border border-slate-200 shadow-[0_2px_8px_rgba(0,0,0,0.03)] flex flex-col justify-between hover:border-slate-300 transition"
+                >
+                  <div
+                    class="flex items-center justify-between text-[10px] font-extrabold tracking-wider text-slate-600 uppercase"
+                  >
+                    <span>Tư thế hiện tại</span>
+                    <div
+                      class="w-5 h-5 rounded-lg bg-slate-100 text-slate-600 flex items-center justify-center"
+                    >
+                      <i data-lucide="user" class="w-3 h-3"></i>
+                    </div>
+                  </div>
+                  <div class="my-1.5">
+                    <span
+                      id="badge-posture"
+                      class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg text-[11px] font-extrabold bg-slate-100 text-slate-700 border border-slate-300 shadow-2xs"
+                    >
+                      <span
+                        class="w-1.5 h-1.5 rounded-full bg-slate-500"
+                      ></span>
+                      Chờ khởi động
+                    </span>
+                  </div>
+                  <div class="text-[11px] font-semibold text-slate-600">
+                    Độ tin cậy:
+                    <span id="metric-prob" class="font-extrabold text-slate-900"
+                      >--</span
+                    >
+                  </div>
+                </div>
+
+                <!-- Thẻ 2: Điểm -->
+                <div
+                  class="bg-white p-3 rounded-2xl border border-slate-200 shadow-[0_2px_8px_rgba(0,0,0,0.03)] flex flex-col justify-between hover:border-slate-300 transition"
+                >
+                  <div
+                    class="flex items-center justify-between text-[10px] font-extrabold tracking-wider text-slate-600 uppercase"
+                  >
+                    <span>Điểm công thái học</span>
+                    <div
+                      class="w-5 h-5 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center"
+                    >
+                      <i data-lucide="shield-check" class="w-3 h-3"></i>
+                    </div>
+                  </div>
+                  <div class="my-1 flex items-baseline gap-1.5">
+                    <span
+                      id="stat-score"
+                      class="text-xl font-extrabold text-slate-900 tracking-tight"
+                      >--</span
+                    >
+                    <span
+                      id="badge-score-rating"
+                      class="text-[9px] font-extrabold px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-700 uppercase tracking-wide border border-slate-300"
+                      >Chờ phiên</span
+                    >
+                  </div>
+                  <div class="space-y-1">
+                    <div
+                      class="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden border border-slate-200"
+                    >
+                      <div
+                        id="stat-score-bar"
+                        class="bg-blue-600 h-1.5 rounded-full transition-all duration-300"
+                        style="width: 0%"
+                      ></div>
+                    </div>
+                    <div
+                      class="flex justify-between text-[10px] font-bold text-slate-600"
+                    >
+                      <span>0</span>
+                      <span class="text-slate-700">Ngưỡng: 85+</span>
+                      <span>100</span>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Thẻ 3: Thời gian -->
+                <div
+                  class="bg-white p-3 rounded-2xl border border-slate-200 shadow-[0_2px_8px_rgba(0,0,0,0.03)] flex flex-col justify-between hover:border-slate-300 transition"
+                >
+                  <div
+                    class="flex items-center justify-between text-[10px] font-extrabold tracking-wider text-slate-600 uppercase"
+                  >
+                    <span>Thời gian phiên</span>
+                    <div
+                      class="w-5 h-5 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center"
+                    >
+                      <i data-lucide="clock" class="w-3 h-3"></i>
+                    </div>
+                  </div>
+                  <div class="my-1">
+                    <span
+                      id="stat-session-time"
+                      class="text-xl font-extrabold text-indigo-700 tracking-tight font-mono"
+                      >00:00:00</span
+                    >
+                  </div>
+                  <div
+                    class="text-[11px] font-semibold text-slate-600 truncate"
+                  >
+                    Đúng chuẩn:
+                    <span
+                      id="stat-correct-detail"
+                      class="text-slate-900 font-extrabold"
+                      >--</span
+                    >
+                  </div>
+                </div>
+
+                <!-- Thẻ 4: Cảnh báo -->
+                <div
+                  id="card-alerts-container"
+                  class="bg-white p-3 rounded-2xl border border-slate-200 shadow-[0_2px_8px_rgba(0,0,0,0.03)] flex flex-col justify-between hover:border-slate-300 transition"
+                >
+                  <div
+                    class="flex items-center justify-between text-[10px] font-extrabold tracking-wider text-slate-600 uppercase"
+                  >
+                    <span>Cảnh báo sai tư thế</span>
+                    <div
+                      id="icon-alert-box"
+                      class="w-5 h-5 rounded-lg bg-slate-100 text-slate-600 flex items-center justify-center"
+                    >
+                      <i data-lucide="bell" class="w-3 h-3"></i>
+                    </div>
+                  </div>
+                  <div class="my-1 flex items-baseline gap-1">
+                    <span
+                      id="stat-alerts"
+                      class="text-xl font-extrabold text-slate-900 tracking-tight transition"
+                      >0</span
+                    >
+                    <span class="text-[12px] text-slate-600 font-bold"
+                      >lỗi vi phạm</span
+                    >
+                  </div>
+                  <div
+                    class="text-[10px] font-semibold text-slate-600 truncate"
+                  >
+                    Ngưỡng:
+                    <span
+                      id="txt-alert-threshold-label"
+                      class="font-extrabold text-slate-800"
+                      >> 2.0s</span
+                    >
+                  </div>
+                </div>
+              </div>
+
+              <!-- 2. Khối Sinh trắc học Real-time -->
+              <div
+                class="bg-white rounded-2xl border border-slate-200 shadow-[0_4px_16px_rgba(0,0,0,0.02)] p-3 space-y-2"
+              >
+                <div
+                  class="flex items-center justify-between text-xs pb-1.5 border-b border-slate-200"
+                >
+                  <h3
+                    class="font-extrabold text-slate-900 flex items-center gap-1.5"
+                  >
+                    <i
+                      data-lucide="compass"
+                      class="w-4 h-4 text-indigo-600"
+                    ></i>
+                    Sinh trắc học Real-time
+                  </h3>
+                  <span
+                    class="text-[10px] font-extrabold uppercase tracking-wider bg-slate-100 text-slate-700 px-2 py-0.5 rounded-md border border-slate-200"
+                    id="info-features-count"
+                    >13 Features</span
+                  >
+                </div>
+
+                <!-- Góc nghiêng vai -->
+                <div class="space-y-0.5">
+                  <div class="flex justify-between text-[12px]">
+                    <span class="text-slate-600 font-bold truncate"
+                      >Nghiêng vai (Shoulder)</span
+                    >
+                    <span
+                      class="font-extrabold text-slate-900 font-mono"
+                      id="angle-shoulder"
+                      >0.0°</span
+                    >
+                  </div>
+                  <div
+                    class="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden border border-slate-200"
+                  >
+                    <div
+                      id="bar-shoulder"
+                      class="bg-emerald-500 h-1.5 rounded-full transition-all duration-200"
+                      style="width: 50%"
+                    ></div>
+                  </div>
+                  <div
+                    class="flex justify-between text-[10px] font-bold text-slate-500"
+                  >
+                    <span>-15°</span>
+                    <span class="text-emerald-700 font-extrabold"
+                      >0° Chuẩn</span
+                    >
+                    <span>+15°</span>
+                  </div>
+                </div>
+
+                <!-- Góc đầu - trọng lực -->
+                <div class="space-y-0.5">
+                  <div class="flex justify-between text-[12px]">
+                    <span class="text-slate-600 font-bold truncate"
+                      >Đầu - trọng lực (Gravity)</span
+                    >
+                    <span
+                      class="font-extrabold text-slate-900 font-mono"
+                      id="angle-gravity"
+                      >0.0°</span
+                    >
+                  </div>
+                  <div
+                    class="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden border border-slate-200"
+                  >
+                    <div
+                      id="bar-gravity"
+                      class="bg-sky-500 h-1.5 rounded-full transition-all duration-200"
+                      style="width: 20%"
+                    ></div>
+                  </div>
+                  <div
+                    class="flex justify-between text-[10px] font-bold text-slate-500"
+                  >
+                    <span class="text-sky-700 font-extrabold">0°</span>
+                    <span>&lt; 25°</span>
+                    <span class="text-rose-700 font-extrabold">&gt; 45°</span>
+                  </div>
+                </div>
+
+                <!-- Góc đầu - thân (Body) -->
+                <div class="space-y-0.5">
+                  <div class="flex justify-between text-[12px]">
+                    <span class="text-slate-600 font-bold truncate"
+                      >Đầu - thân (Body)</span
+                    >
+                    <span
+                      class="font-extrabold text-slate-900 font-mono"
+                      id="angle-head-body"
+                      >0.0°</span
+                    >
+                  </div>
+                  <div
+                    class="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden border border-slate-200"
+                  >
+                    <div
+                      id="bar-head-body"
+                      class="bg-violet-600 h-1.5 rounded-full transition-all duration-200"
+                      style="width: 30%"
+                    ></div>
+                  </div>
+                  <div
+                    class="flex justify-between text-[10px] font-bold text-slate-500"
+                  >
+                    <span>-20°</span>
+                    <span class="text-emerald-700 font-extrabold"
+                      >0° Chuẩn</span
+                    >
+                    <span>+20°</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 3. Khối Gợi Ý Cho Bạn -->
+              <div
+                class="bg-white p-4 rounded-2xl border border-slate-200 shadow-[0_4px_16px_rgba(0,0,0,0.02)] flex flex-col justify-between min-h-[170px] transition-all"
+              >
+                <div>
+                  <h3
+                    class="font-extrabold text-slate-900 text-xs flex items-center gap-1.5 mb-3"
+                  >
+                    <i data-lucide="sparkles" class="w-4 h-4 text-sky-600"></i>
+                    Gợi ý công thái học
+                  </h3>
+
+                  <div class="space-y-3 text-xs">
+                    <div class="flex items-start gap-2.5 min-h-[38px]">
+                      <div
+                        id="tip-icon-1-box"
+                        class="p-1.5 rounded-lg bg-sky-50 text-sky-600 shrink-0 mt-0.5 border border-sky-100"
+                      >
+                        <i
+                          id="tip-icon-1"
+                          data-lucide="arrow-up"
+                          class="w-3.5 h-3.5"
+                        ></i>
+                      </div>
+                      <p
+                        id="tip-text-1"
+                        class="text-slate-700 font-semibold leading-relaxed"
+                      >
+                        Nâng màn hình cao hơn một chút để giảm cúi cổ.
+                      </p>
+                    </div>
+
+                    <div class="flex items-start gap-2.5 min-h-[38px]">
+                      <div
+                        id="tip-icon-2-box"
+                        class="p-1.5 rounded-lg bg-emerald-50 text-emerald-600 shrink-0 mt-0.5 border border-emerald-100"
+                      >
+                        <i
+                          id="tip-icon-2"
+                          data-lucide="footprints"
+                          class="w-3.5 h-3.5"
+                        ></i>
+                      </div>
+                      <p
+                        id="tip-text-2"
+                        class="text-slate-700 font-semibold leading-relaxed"
+                      >
+                        Đứng dậy vận động 2 phút sau mỗi 45 phút.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div
+                  class="pt-3 mt-4 border-t border-slate-100 flex items-center justify-between"
+                >
+                  <button
+                    onclick="switchView('analytics')"
+                    class="text-xs text-sky-600 hover:text-sky-700 font-bold flex items-center gap-1.5 cursor-pointer transition"
+                  >
+                    <span>Xem biểu đồ phân tích</span>
+                    <i data-lucide="arrow-right" class="w-3.5 h-3.5"></i>
+                  </button>
+                  <button
+                    onclick="switchView('history')"
+                    class="text-xs text-indigo-600 hover:text-indigo-700 font-bold flex items-center gap-1.5 cursor-pointer transition"
+                  >
+                    <span>Xem lịch sử phiên</span>
+                    <i data-lucide="arrow-right" class="w-3.5 h-3.5"></i>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ============================================== -->
+        <!-- VIEW 2: 📊 PHÂN TÍCH & BIỂU ĐỒ (ANALYTICS)     -->
+        <!-- ============================================== -->
+        <section id="view-analytics" class="hidden max-w-7xl mx-auto space-y-6">
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div
+              class="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex items-center gap-3.5"
+            >
+              <div
+                class="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0"
+              >
+                <i data-lucide="check-circle" class="w-5 h-5"></i>
+              </div>
+              <div>
+                <p class="text-xs text-slate-500 font-bold">
+                  Trạng thái theo dõi
+                </p>
+                <h4
+                  class="text-base font-extrabold text-slate-900 mt-0.5"
+                  id="analytics-summary-status"
+                >
+                  Đang nghỉ
+                </h4>
+              </div>
+            </div>
+
+            <div
+              class="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex items-center gap-3.5"
+            >
+              <div
+                class="w-10 h-10 rounded-xl bg-sky-100 text-sky-700 flex items-center justify-center shrink-0"
+              >
+                <i data-lucide="trending-up" class="w-5 h-5"></i>
+              </div>
+              <div>
+                <p class="text-xs text-slate-500 font-bold">
+                  Tỷ lệ đúng trung bình
+                </p>
+                <h4
+                  class="text-base font-extrabold text-slate-900 mt-0.5"
+                  id="analytics-summary-good"
+                >
+                  Chưa có dữ liệu
+                </h4>
+              </div>
+            </div>
+
+            <div
+              class="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex items-center gap-3.5"
+            >
+              <div
+                class="w-10 h-10 rounded-xl bg-indigo-100 text-indigo-700 flex items-center justify-center shrink-0"
+              >
+                <i data-lucide="calendar" class="w-5 h-5"></i>
+              </div>
+              <div>
+                <p class="text-xs text-slate-500 font-bold">
+                  Ngày phiên làm việc
+                </p>
+                <h4
+                  class="text-base font-extrabold text-slate-900 mt-0.5"
+                  id="analytics-date-label-tab"
+                >
+                  Hôm nay
+                </h4>
+              </div>
+            </div>
+          </div>
+
+          <div
+            class="bg-white rounded-2xl border border-slate-200 shadow-[0_4px_16px_rgba(0,0,0,0.02)] p-6 space-y-4"
+          >
+            <div
+              class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-4"
+            >
+              <div>
+                <h3
+                  class="font-extrabold text-slate-900 text-base flex items-center gap-2"
+                >
+                  <i data-lucide="trending-up" class="w-5 h-5 text-sky-600"></i>
+                  Posture Analytics (Biểu đồ xu hướng tư thế)
+                </h3>
+                <p
+                  id="analytics-insight-text"
+                  class="text-xs text-slate-500 font-semibold mt-1"
+                >
+                  Chưa có dữ liệu phiên. Hãy bật webcam để bắt đầu ghi nhận biểu
+                  đồ.
+                </p>
+              </div>
+
+              <div class="flex items-center gap-3 text-xs font-bold">
+                <span
+                  class="inline-flex items-center gap-1.5 text-slate-700 dark:text-slate-200 font-semibold bg-slate-100 px-2.5 py-1 rounded-md border border-slate-200"
+                >
+                  <i data-lucide="clock" class="w-3.5 h-3.5 text-slate-500"></i>
+                  <span>Cập nhật: 1 phút / điểm</span>
+                </span>
+                <span
+                  class="inline-flex items-center text-slate-700 dark:text-slate-200 gap-1.5 text-emerald-700"
+                >
+                  <span class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
+                  Ngồi đúng (%)
+                </span>
+                <span
+                  class="inline-flex items-center text-slate-700 dark:text-slate-200 gap-1.5 text-rose-700"
+                >
+                  <span class="w-2.5 h-2.5 rounded-full bg-rose-500"></span>
+                  Ngồi sai (%)
+                </span>
+              </div>
+            </div>
+
+            <div class="relative w-full h-[400px] pt-2">
+              <canvas id="postureAnalyticsChart"></canvas>
+              <div
+                id="chart-empty-placeholder"
+                class="absolute inset-0 flex flex-col items-center justify-center bg-white/95 backdrop-blur-[1px] text-center z-10"
+              >
+                <div
+                  class="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 mb-3 shadow-inner"
+                >
+                  <i data-lucide="line-chart" class="w-6 h-6"></i>
+                </div>
+                <p class="text-sm font-bold text-slate-700">
+                  Chưa có dữ liệu biểu đồ
+                </p>
+                <p class="text-xs text-slate-400 font-medium mt-1 max-w-sm">
+                  Bật webcam ở tab Tổng quan và duy trì phiên để hệ thống tự
+                  động tổng hợp xu hướng theo từng phút.
+                </p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ============================================== -->
+        <!-- VIEW 3: 🕒 LỊCH SỬ PHIÊN (CHUẨN MASTER-DETAIL)  -->
+        <!-- ============================================== -->
+        <section id="view-history" class="hidden max-w-7xl mx-auto space-y-5">
+          <div class="flex flex-wrap items-center justify-between gap-3 pb-1">
+            <!-- Cụm lọc bên trái: Thời gian + Loại lỗi (Đã căn chỉnh icon & Dark Mode) -->
+            <div class="flex items-center gap-2.5 text-xs font-bold">
+              <!-- Ô chọn ngày có icon lịch đồng bộ -->
+              <div class="relative inline-flex items-center">
+                <i
+                  data-lucide="calendar"
+                  class="w-3.5 h-3.5 absolute left-3 text-slate-400 dark:text-slate-500 pointer-events-none"
+                ></i>
+                <input
+                  type="date"
+                  id="filter-date"
+                  class="pl-8 pr-3 py-1.5 text-xs font-semibold rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:border-slate-300 dark:hover:border-slate-600 focus:outline-none focus:ring-2 focus:ring-sky-500/20 cursor-pointer shadow-2xs transition"
+                />
+              </div>
+
+              <!-- Ô lọc loại lỗi có mũi tên căn chuẩn -->
+              <div class="relative inline-flex items-center">
+                <i
+                  data-lucide="filter"
+                  class="w-3.5 h-3.5 absolute left-3 text-slate-400 dark:text-slate-500 pointer-events-none"
+                ></i>
+                <select
+                  id="filter-error-type"
+                  class="appearance-none pl-8 pr-8 py-1.5 text-2xs font-semibold rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:border-slate-300 dark:hover:border-slate-600 focus:outline-none focus:ring-2 focus:ring-sky-500/20 cursor-pointer shadow-2xs transition"
+                >
+                  <option value="all">Tất cả loại lỗi</option>
+                  <option value="cổ">Cúi đầu / Gập cổ</option>
+                  <option value="vai">Lệch vai</option>
+                  <option value="gù">Gù lưng</option>
+                </select>
+                <i
+                  data-lucide="chevron-down"
+                  class="w-3.5 h-3.5 absolute right-2.5 text-slate-400 dark:text-slate-500 pointer-events-none"
+                ></i>
+              </div>
+            </div>
+
+            <!-- Cụm nút xuất file bên phải: CSV + Excel -->
+            <div class="flex items-center gap-2 text-xs font-bold">
+              <button
+                onclick="exportHistoryCSV()"
+                class="inline-flex items-center gap-2 px-3.5 py-2 bg-white hover:bg-slate-50 text-slate-700 rounded-xl border border-slate-200 shadow-2xs transition cursor-pointer"
+              >
+                <i data-lucide="file-text" class="w-4 h-4 text-slate-500"></i>
+                <span>Xuất CSV</span>
+              </button>
+              <button
+                onclick="exportHistoryExcel()"
+                class="inline-flex items-center gap-2 px-3.5 py-2 bg-white hover:bg-slate-50 text-slate-700 rounded-xl border border-slate-200 shadow-2xs transition cursor-pointer"
+              >
+                <i data-lucide="sheet" class="w-4 h-4 text-emerald-600"></i>
+                <span>Xuất Excel</span>
+              </button>
+            </div>
+          </div>
+          <!-- 1. Hàng 4 thẻ KPI tổng hợp trên đỉnh (Metrics Row) -->
+          <!-- ĐÃ ĐỒNG BỘ CÙNG FONT CHỮ VỚI "CHƯA CÓ DỮ LIỆU": -->
+          <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <!-- Thẻ 1: Tổng số phiên -->
+            <div
+              class="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xs"
+            >
+              <span
+                class="text-xs text-slate-500 dark:text-slate-400 font-bold block mb-1"
+                >Tổng số phiên</span
+              >
+              <span
+                id="hist-total-sessions"
+                class="text-[14px] font-bold text-slate-900 dark:text-white"
+                >Chưa có dữ liệu</span
+              >
+            </div>
+
+            <!-- Thẻ 2: Tổng thời gian ngồi -->
+            <div
+              class="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xs"
+            >
+              <span
+                class="text-xs text-slate-500 dark:text-slate-400 font-bold block mb-1"
+                >Tổng thời gian ngồi</span
+              >
+              <span
+                id="hist-total-time"
+                class="text-[14px] font-bold text-slate-900 dark:text-white"
+                >0m 0s</span
+              >
+            </div>
+
+            <!-- Thẻ 3: Tổng số vi phạm -->
+            <div
+              class="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xs"
+            >
+              <span
+                class="text-xs text-slate-500 dark:text-slate-400 font-bold block mb-1"
+                >Tổng số vi phạm</span
+              >
+              <span
+                id="hist-total-violations"
+                class="text-[14px] font-bold text-slate-900 dark:text-white"
+                >0</span
+              >
+            </div>
+
+            <!-- Thẻ 4: Điểm TB tốt nhất -->
+            <div
+              class="bg-emerald-50/70 dark:bg-emerald-950/40 p-4 rounded-2xl border border-emerald-200 dark:border-emerald-800/60 shadow-2xs"
+            >
+              <span
+                class="text-xs text-emerald-700 dark:text-emerald-400 font-bold block mb-1"
+                >Điểm TB tốt nhất</span
+              >
+              <span
+                id="hist-best-score"
+                class="text-[14px] font-bold text-emerald-700 dark:text-emerald-400"
+                >--%</span
+              >
+            </div>
+          </div>
+
+          <!-- 2. Bố cục Master - Detail (Chiều cao vừa vặn, không bị quá dài) -->
+          <div class="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+            <!-- Cột Trái (5 cols): Danh sách phiên -->
+            <div
+              class="lg:col-span-5 bg-white rounded-2xl border border-slate-200 shadow-2xs p-4 flex flex-col justify-between"
+            >
+              <div class="space-y-3 flex-1 flex flex-col min-h-0">
+                <div
+                  class="flex items-center justify-between pb-3 border-b border-slate-100 shrink-0"
+                >
+                  <h3 class="font-extrabold text-slate-900 text-sm">
+                    Danh sách phiên
+                  </h3>
+                  <div class="flex items-center gap-2">
+                    <span class="text-slate-300">•</span>
+                    <button
+                      onclick="clearAllHistory()"
+                      class="text-[13px] text-slate-600 dark:text-slate-200 hover:text-rose-600 font-semibold transition cursor-pointer"
+                    >
+                      Xóa lịch sử
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Danh sách cuộn: Thu gọn chiều cao tối thiểu về 240px -->
+                <div
+                  id="history-session-list"
+                  class="space-y-2 overflow-y-auto max-h-[300px] min-h-[220px] pr-1 custom-scrollbar"
+                >
+                  <!-- Javascript sẽ tự động render danh sách các phiên tại đây -->
+                </div>
+              </div>
+            </div>
+
+            <!-- Cột Phải (7 cols): Chi tiết vi phạm của phiên đang chọn -->
+            <div
+              class="lg:col-span-7 bg-white rounded-2xl border border-slate-200 shadow-2xs p-4 flex flex-col justify-between"
+            >
+              <div class="space-y-3 flex-1 flex flex-col min-h-0">
+                <div
+                  class="flex items-center justify-between pb-3 border-b border-slate-100 shrink-0"
+                >
+                  <div>
+                    <h3
+                      id="detail-session-title"
+                      class="font-extrabold text-slate-900 text-sm"
+                    >
+                      Chi tiết phiên làm việc
+                    </h3>
+                    <p
+                      id="detail-session-sub"
+                      class="text-[12px] text-slate-500 font-semibold mt-0.5"
+                    >
+                      Chọn một phiên bên trái để xem timeline vi phạm
+                    </p>
+                  </div>
+                  <span
+                    id="detail-count-badge"
+                    class="text-xs font-bold text-slate-600 bg-slate-100 px-2.5 py-1 rounded-lg border border-slate-200 shrink-0"
+                    >0 vi phạm</span
+                  >
+                </div>
+
+                <!-- Chi tiết cuộn: Thu gọn chiều cao tối thiểu về 240px -->
+                <div
+                  id="history-detail-list"
+                  class="space-y-2 overflow-y-auto max-h-[300px] min-h-[220px] pr-1 custom-scrollbar text-xs"
+                >
+                  <!-- Javascript sẽ render chi tiết vi phạm tại đây -->
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <!-- ============================================== -->
+    <!-- MODAL SESSION SUMMARY (KẾT THÚC PHIÊN)          -->
+    <!-- ============================================== -->
+    <div
+      id="modal-summary"
+      class="hidden fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4"
+    >
+      <div
+        class="bg-white w-full max-w-lg rounded-3xl border border-slate-200 shadow-2xl p-6 space-y-5 animate-in fade-in zoom-in-95 duration-200"
+      >
+        <div
+          class="flex items-center justify-between pb-3 border-b border-slate-100"
+        >
+          <div class="flex items-center gap-3">
+            <div
+              class="w-10 h-10 rounded-2xl bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold"
+            >
+              <i data-lucide="award" class="w-5 h-5"></i>
+            </div>
+            <div>
+              <h3 class="font-extrabold text-slate-900 text-base">
+                Tổng kết phiên làm việc
+              </h3>
+              <p class="text-xs text-slate-500 font-medium">
+                Báo cáo đánh giá hiệu suất công thái học
+              </p>
+            </div>
+          </div>
+          <button
+            id="btn-close-summary"
+            class="text-slate-400 hover:text-slate-700 p-1.5 rounded-lg hover:bg-slate-100 cursor-pointer"
+          >
+            <i data-lucide="x" class="w-5 h-5"></i>
+          </button>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3 text-xs">
+          <div class="p-3.5 bg-slate-50 rounded-2xl border border-slate-200/80">
+            <span class="text-slate-500 font-bold block mb-1"
+              >Tổng thời gian</span
+            >
+            <span
+              id="modal-sum-time"
+              class="text-2xl font-extrabold text-slate-900 font-mono"
+              >00:00:00</span
+            >
+            <span class="text-[12px] text-slate-400 block mt-0.5"
+              >Hoàn thành phiên</span
+            >
+          </div>
+
+          <div
+            class="p-3.5 bg-emerald-50/70 rounded-2xl border border-emerald-200/80"
+          >
+            <span class="text-emerald-700 font-bold block mb-1"
+              >Tỷ lệ ngồi đúng</span
+            >
+            <span
+              id="modal-sum-good"
+              class="text-2xl font-extrabold text-emerald-700"
+              >--%</span
+            >
+            <span
+              id="modal-sum-rating"
+              class="text-[12px] text-emerald-600 font-semibold block mt-0.5"
+              >Xếp loại: --</span
+            >
+          </div>
+
+          <div
+            class="p-3.5 bg-rose-50/70 rounded-2xl border border-rose-200/80"
+          >
+            <span class="text-rose-700 font-bold block mb-1"
+              >Số lần cảnh báo</span
+            >
+            <span
+              id="modal-sum-alerts"
+              class="text-2xl font-extrabold text-rose-700"
+              >0 lần</span
+            >
+            <span class="text-[12px] text-rose-600 block mt-0.5"
+              >Lỗi tư thế vượt ngưỡng</span
+            >
+          </div>
+
+          <div
+            class="p-3.5 bg-indigo-50/70 rounded-2xl border border-indigo-200/80"
+          >
+            <span class="text-indigo-700 font-bold block mb-1"
+              >Thời gian nghỉ</span
+            >
+            <span
+              id="modal-sum-break"
+              class="text-2xl font-extrabold text-indigo-700 font-mono"
+              >00:00</span
+            >
+            <span class="text-[12px] text-indigo-600 block mt-0.5"
+              >Đạt chuẩn Pomodoro</span
+            >
+          </div>
+        </div>
+
+        <!-- Nhận xét AI (Đã gán ID để CSS Dark Mode bắt chuẩn 100%) -->
+        <div
+          id="card-ai-advice"
+          class="p-4 rounded-2xl space-y-1.5 shadow-sm transition"
+        >
+          <span
+            class="ai-advice-title font-black flex items-center gap-2 text-xs uppercase tracking-wider"
+          >
+            <i data-lucide="sparkles" class="w-4 h-4 stroke-[2.5]"></i>
+            Nhận xét từ AI:
+          </span>
+          <p id="modal-sum-advice" class="font-bold text-xs leading-relaxed">
+            Hãy tiếp tục duy trì tư thế thẳng lưng và điều chỉnh độ cao màn hình
+            ngang tầm mắt khi làm việc.
+          </p>
+        </div>
+
+        <div class="pt-2 flex items-center justify-end gap-2.5">
+          <button
+            id="btn-modal-csv"
+            class="px-4 py-2 border border-slate-300 text-slate-700 hover:bg-slate-100 rounded-xl text-xs font-bold flex items-center gap-1.5 transition cursor-pointer"
+          >
+            <i data-lucide="file-down" class="w-4 h-4"></i>
+            <span>Tải báo cáo CSV</span>
+          </button>
+          <button
+            id="btn-modal-new-session"
+            class="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition cursor-pointer"
+          >
+            Bắt đầu phiên mới
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============================================== -->
+    <!-- MODAL SETTINGS (GIỮ NGUYÊN CODE CŨ)             -->
+    <!-- ============================================== -->
+    <div
+      id="modal-settings"
+      class="hidden fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-xs p-4"
+    >
+      <div
+        class="bg-white w-full max-w-md rounded-2xl border border-slate-300 shadow-xl p-5 space-y-4"
+      >
+        <div
+          class="flex items-center justify-between pb-3 border-b border-slate-200"
+        >
+          <div class="flex items-center gap-2">
+            <div class="p-1.5 bg-sky-100 text-sky-700 rounded-lg">
+              <i data-lucide="sliders" class="w-4 h-4"></i>
+            </div>
+            <h3 class="font-bold text-slate-900 text-sm">
+              Cài đặt giám sát & Ngưỡng báo động
+            </h3>
+          </div>
+          <button
+            id="btn-close-settings"
+            class="text-slate-500 hover:text-slate-800 p-1 rounded-md cursor-pointer"
+          >
+            <i data-lucide="x" class="w-4 h-4"></i>
+          </button>
+        </div>
+
+        <div class="space-y-3.5 text-xs">
+          <div>
+            <label class="block font-bold text-slate-800 mb-1"
+              >Thời gian ngồi sai kích hoạt cảnh báo (giây)</label
+            >
+            <input
+              id="setting-alert-sec"
+              type="number"
+              min="1"
+              max="10"
+              value="2"
+              class="w-full px-3 py-2 border rounded-xl border-slate-300 text-slate-800 font-bold focus:outline-none focus:border-sky-500"
+            />
+            <p class="text-[11px] text-slate-600 font-semibold mt-1">
+              Hệ thống sẽ rung chuông nếu phát hiện sai liên tục quá số giây
+              này.
+            </p>
+          </div>
+          <div>
+            <label class="block font-bold text-slate-800 mb-1"
+              >Ngưỡng độ tin cậy AI (Confidence)</label
+            >
+            <input
+              id="setting-conf"
+              type="range"
+              min="0.3"
+              max="0.9"
+              step="0.05"
+              value="0.45"
+              class="w-full accent-sky-600"
+            />
+            <div
+              class="flex justify-between text-[11px] text-slate-700 font-bold mt-0.5"
+            >
+              <span>0.30</span>
+              <span id="txt-conf-val" class="font-extrabold text-slate-900"
+                >0.45</span
+              >
+              <span>0.90</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="pt-3 border-t border-slate-200 flex justify-end gap-2">
+          <button
+            id="btn-cancel-settings"
+            class="px-3.5 py-1.5 text-xs font-bold rounded-xl text-slate-700 hover:bg-slate-100 cursor-pointer"
+          >
+            Hủy
+          </button>
+          <button
+            id="btn-save-settings"
+            class="px-4 py-1.5 text-xs font-bold rounded-xl bg-sky-600 hover:bg-sky-700 text-white shadow-xs cursor-pointer"
+          >
+            Lưu cài đặt
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============================================== -->
+    <!-- SCRIPT CHÍNH & XỬ LÝ LỊCH SỬ ĐA PHIÊN          -->
+    <!-- ============================================== -->
+    <script>
+      lucide.createIcons();
+      let currentAlertThresholdSec = 2.0;
+      // =============================
+      // ĐIỀU HƯỚNG VIEW (SPA SWITCHER)
+      // =============================
+      function switchView(viewName) {
+        // 1. Ẩn tất cả 3 Views
+        document.getElementById("view-dashboard").classList.add("hidden");
+        document.getElementById("view-analytics").classList.add("hidden");
+        document.getElementById("view-history").classList.add("hidden");
+
+        // 2. Reset style tất cả các nút Sidebar
+        const navBtns = document.querySelectorAll(".sidebar-btn");
+        navBtns.forEach((btn) => {
+          btn.className =
+            "sidebar-btn w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl border border-transparent text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition";
+        });
+
+        // 3. Kích hoạt nút Sidebar đang chọn
+        const activeBtn = document.getElementById(`nav-${viewName}`);
+        if (activeBtn) {
+          activeBtn.className =
+            "sidebar-btn active w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl border border-sky-500 bg-sky-50 text-sky-700 transition";
+        }
+
+        // 4. Hiển thị View tương ứng
+        const targetView = document.getElementById(`view-${viewName}`);
+        if (targetView) targetView.classList.remove("hidden");
+
+        // 5. Cập nhật tiêu đề Topbar & kích hoạt hành vi riêng của từng Tab
+        const titleEl = document.getElementById("page-title");
+        if (viewName === "dashboard") {
+          if (titleEl) titleEl.innerText = "Tổng quan giám sát";
+        } else if (viewName === "analytics") {
+          titleEl.innerText = "Phân tích & Biểu đồ";
+
+          if (
+            typeof postureChart !== "undefined" &&
+            postureChart &&
+            typeof postureChart.resize === "function"
+          ) {
+            setTimeout(() => {
+              postureChart.resize();
+            }, 100);
+          }
+        } else if (viewName === "history") {
+          if (titleEl) titleEl.innerText = "Lịch sử phiên & Nhật ký vi phạm";
+          // Cập nhật lại số liệu KPI và render danh sách phiên từ localStorage
+          if (typeof renderHistoryUI === "function") {
+            renderHistoryUI();
+          }
+        }
+      }
+
+      // =============================
+      // DARK / LIGHT MODE
+      // =============================
+      let darkMode = localStorage.getItem("darkMode") === "true";
+
+      if (darkMode) {
+        document.body.classList.add("dark-mode");
+        const themeButton = document.getElementById("btn-theme-toggle");
+        if (themeButton) {
+          themeButton.innerHTML = '<i data-lucide="sun" class="w-4 h-4"></i>';
+          lucide.createIcons();
+        }
+      }
+
+      const video = document.getElementById("webcam");
+      const canvas = document.getElementById("output-canvas");
+      const ctx = canvas.getContext("2d");
+      const captureCanvas = document.createElement("canvas");
+      const captureCtx = captureCanvas.getContext("2d");
+      const btnToggleCam = document.getElementById("btn-toggle-cam");
+      const btnCamPlaceholder = document.getElementById("btn-cam-placeholder");
+      const btnCamText = document.getElementById("btn-cam-text");
+      const camPlaceholder = document.getElementById("cam-placeholder");
+      const connStatus = document.getElementById("connection-status");
+      const alertBanner = document.getElementById("alert-banner");
+      const btnReset = document.getElementById("btn-reset");
+      const btnThemeToggle = document.getElementById("btn-theme-toggle");
+      const btnToggleSkeleton = document.getElementById("btn-toggle-skeleton");
+
+      // Modals & Export
+      const modalSummary = document.getElementById("modal-summary");
+      const btnEndSession = document.getElementById("btn-end-session");
+      const btnCloseSummary = document.getElementById("btn-close-summary");
+      const btnModalNewSession = document.getElementById(
+        "btn-modal-new-session",
+      );
+      const btnModalCsv = document.getElementById("btn-modal-csv");
+
+      const modalSettings = document.getElementById("modal-settings");
+      const btnOpenSettings = document.getElementById("btn-open-settings");
+      const btnCloseSettings = document.getElementById("btn-close-settings");
+      const btnCancelSettings = document.getElementById("btn-cancel-settings");
+      const btnSaveSettings = document.getElementById("btn-save-settings");
+      const settingAlertSec = document.getElementById("setting-alert-sec");
+      const rangeConf = document.getElementById("setting-conf");
+      const txtConfVal = document.getElementById("txt-conf-val");
+      const txtAlertThresholdLabel = document.getElementById(
+        "txt-alert-threshold-label",
+      );
+
+      // Chart & Tips
+      const chartEmptyPlaceholder = document.getElementById(
+        "chart-empty-placeholder",
+      );
+      const analyticsInsightText = document.getElementById(
+        "analytics-insight-text",
+      );
+      const tipText1 = document.getElementById("tip-text-1");
+      const tipText2 = document.getElementById("tip-text-2");
+      const tipIcon2Box = document.getElementById("tip-icon-2-box");
+
+      let stream = null;
+      let ws = null;
+      let isStreaming = false;
+      let frameInFlight = false;
+      let latestPoseResult = null;
+      let fpsWindowStart = performance.now();
+      let fpsResultCount = 0;
+      let showSkeleton = true;
+      let soundEnabled = true;
+      let lastLoggedLabel = null;
+      let lastFrameTime = performance.now();
+      let lastStatsData = {};
+
+      // Bộ đếm thời gian phiên cục bộ mượt mà
+      let localSessionSeconds = 0;
+      let sessionClockInterval = null;
+      let breakSeconds = 0;
+      let breakClockInterval = null;
+      let isOnBreak = false;
+      let sessionStartTime = null;
+
+      // Danh sách lỗi vi phạm trong phiên hiện tại
+      let currentSessionViolations = [];
+      let lastViolationTime = 0;
+
+      function formatTime(sec) {
+        const hrs = String(Math.floor(sec / 3600)).padStart(2, "0");
+        const mins = String(Math.floor((sec % 3600) / 60)).padStart(2, "0");
+        const secs = String(sec % 60).padStart(2, "0");
+        return `${hrs}:${mins}:${secs}`;
+      }
+
+      function formatBreakTime(sec) {
+        const mins = String(Math.floor(sec / 60)).padStart(2, "0");
+        const secs = String(sec % 60).padStart(2, "0");
+        return `${mins}:${secs}`;
+      }
+
+      function startBreakTimer() {
+        if (isOnBreak || breakClockInterval) return;
+        isOnBreak = true;
+        breakClockInterval = setInterval(() => {
+          breakSeconds++;
+          const breakEl = document.getElementById("modal-sum-break");
+          if (breakEl) breakEl.innerText = formatBreakTime(breakSeconds);
+        }, 1000);
+      }
+
+      function stopBreakTimer() {
+        if (breakClockInterval) {
+          clearInterval(breakClockInterval);
+          breakClockInterval = null;
+        }
+        isOnBreak = false;
+      }
+
+      let currentMinuteGoodFrames = 0;
+      let currentMinuteBadFrames = 0;
+      let minuteIndex = 0;
+      let hasAlertedBreak = false;
+
+      document.getElementById("analytics-date-label-tab").innerText =
+        new Date().toLocaleDateString("vi-VN");
+
+      // ==============================================================
+      // QUẢN LÝ LỊCH SỬ ĐA PHIÊN (MULTI-SESSION & MASTER-DETAIL)
+      // ==============================================================
+      function getSavedSessions() {
+        try {
+          return JSON.parse(
+            localStorage.getItem("posture_sessions_history") || "[]",
+          );
+        } catch {
+          return [];
+        }
+      }
+
+      function saveCurrentSessionRecord() {
+        if (localSessionSeconds < 5) return; // Bỏ qua nếu phiên quá ngắn (< 5s)
+        const sessions = getSavedSessions();
+        const endTime = new Date();
+        const startTime =
+          sessionStartTime || new Date(Date.now() - localSessionSeconds * 1000);
+
+        const pad = (n) => String(n).padStart(2, "0");
+        const timeRange = `${pad(startTime.getHours())}:${pad(startTime.getMinutes())} – ${pad(endTime.getHours())}:${pad(endTime.getMinutes())}`;
+        const dateStr = `${pad(startTime.getDate())}/${pad(startTime.getMonth() + 1)}/${startTime.getFullYear()}`;
+
+        const score = lastStatsData.ergonomics_score
+          ? Math.round(lastStatsData.ergonomics_score)
+          : 0;
+
+        const newRecord = {
+          id: Date.now(),
+          date: dateStr,
+          timeRange: timeRange,
+          durationSec: localSessionSeconds,
+          durationFormatted: formatTime(localSessionSeconds),
+          score: score,
+          violationsCount: currentSessionViolations.length,
+          violations: [...currentSessionViolations],
+        };
+
+        sessions.unshift(newRecord);
+        localStorage.setItem(
+          "posture_sessions_history",
+          JSON.stringify(sessions),
+        );
+        renderHistoryUI();
+      }
+
+      let selectedSessionId = null;
+
+      // 1. Lắng nghe sự kiện khi người dùng chọn ngày hoặc chọn lỗi
+      const filterDateInput = document.getElementById("filter-date");
+      const filterErrorSelect = document.getElementById("filter-error-type");
+
+      if (filterDateInput)
+        filterDateInput.addEventListener("change", renderHistoryUI);
+      if (filterErrorSelect)
+        filterErrorSelect.addEventListener("change", renderHistoryUI);
+
+      // 2. Hàm render lịch sử kết hợp bộ lọc Ngày + Loại lỗi
+      function renderHistoryUI() {
+        const allSessions = getSavedSessions();
+        const selectedDate = filterDateInput ? filterDateInput.value : ""; // định dạng: YYYY-MM-DD
+        const selectedType = filterErrorSelect
+          ? filterErrorSelect.value
+          : "all";
+
+        // Lọc danh sách theo ngày và loại lỗi đã chọn
+        const sessions = allSessions.filter((s) => {
+          // Lọc theo ngày
+          let matchDate = true;
+          if (selectedDate) {
+            // Chuyển YYYY-MM-DD thành DD/MM để so khớp với định dạng s.date
+            const [y, m, d] = selectedDate.split("-");
+            const formattedDate = `${d}/${m}/${y}`;
+            matchDate = s.date === formattedDate;
+          }
+
+          // Lọc theo loại lỗi vi phạm
+          let matchType = true;
+          if (selectedType !== "all") {
+            const violations = Array.isArray(s.violations) ? s.violations : [];
+            matchType = violations.some((v) => {
+              const typeStr = (v.type || "").toLowerCase();
+              return typeStr.includes(selectedType);
+            });
+          }
+
+          return matchDate && matchType;
+        });
+
+        // Cập nhật 4 Card tổng hợp (Metrics)
+        document.getElementById("hist-total-sessions").innerText =
+          sessions.length > 0 ? sessions.length : "Chưa có dữ liệu";
+        // Thu nhỏ kích thước chữ nếu hiển thị câu "Chưa có dữ liệu" để không bị vỡ khung
+        const sessionEl = document.getElementById("hist-total-sessions");
+        if (sessionEl) {
+          sessionEl.innerText =
+            sessions.length === 0 ? "Chưa có dữ liệu" : sessions.length;
+          sessionEl.className =
+            "text-[14px] font-bold text-slate-900 dark:text-white";
+        }
+
+        const totalSec = sessions.reduce(
+          (acc, s) => acc + (s.durationSec || 0),
+          0,
+        );
+        const hrs = Math.floor(totalSec / 3600);
+        const mins = Math.floor((totalSec % 3600) / 60);
+        document.getElementById("hist-total-time").innerText =
+          hrs > 0 ? `${hrs}h ${mins}m` : `${mins}m ${totalSec % 60}s`;
+
+        const totalViolations = sessions.reduce(
+          (acc, s) => acc + (s.violationsCount || 0),
+          0,
+        );
+        document.getElementById("hist-total-violations").innerText =
+          totalViolations;
+
+        const bestScore =
+          sessions.length > 0
+            ? Math.max(...sessions.map((s) => s.score || 0))
+            : null;
+        document.getElementById("hist-best-score").innerText =
+          bestScore !== null ? `${bestScore}%` : "--%";
+
+        // Render Danh sách phiên bên trái (Master)
+        const sessionListEl = document.getElementById("history-session-list");
+        if (sessions.length === 0) {
+          sessionListEl.innerHTML = `
+            <div class="p-6 text-center text-slate-700 dark:text-slate-200 font-medium text-[13px] bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-dashed border-slate-200 dark:border-slate-700">
+              Không có phiên làm việc nào khớp với bộ lọc đã chọn.
+            </div>
+          `;
+          document.getElementById("history-detail-list").innerHTML = `
+            <div class="p-8 text-center text-slate-700 dark:text-slate-200 font-medium text-[13px]">Chưa có dữ liệu vi phạm.</div>
+          `;
+          document.getElementById("detail-count-badge").innerText = "0 vi phạm";
+          return;
+        }
+
+        if (
+          !selectedSessionId ||
+          !sessions.find((s) => s.id === selectedSessionId)
+        ) {
+          selectedSessionId = sessions[0].id;
+        }
+
+        sessionListEl.innerHTML = sessions
+          .map((s) => {
+            const isSelected = s.id === selectedSessionId;
+            const activeClass = isSelected
+              ? "border-sky-500 bg-sky-50/60 dark:bg-sky-950/40 shadow-xs ring-1 ring-sky-500/20"
+              : "border-slate-200 dark:border-slate-700/80 bg-slate-50/50 dark:bg-slate-800/40 hover:bg-slate-100/70 dark:hover:bg-slate-800/70";
+
+            let scoreBadgeColor =
+              "bg-rose-100 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300";
+            if (s.score >= 85)
+              scoreBadgeColor =
+                "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300";
+            else if (s.score >= 70)
+              scoreBadgeColor =
+                "bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-300";
+
+            return `
+            <div
+              onclick="selectSession(${s.id})"
+              class="p-3 rounded-xl border ${activeClass} transition cursor-pointer flex items-center justify-between"
+            >
+              <div>
+                <h4 class="font-bold text-slate-900 dark:text-white text-xs">${s.date} • ${s.timeRange}</h4>
+                <p class="text-[11px] text-slate-500 dark:text-slate-400 font-semibold mt-0.5">${s.durationFormatted} • ${s.violationsCount} vi phạm</p>
+              </div>
+              <span class="text-xs font-extrabold px-2 py-0.5 rounded-md ${scoreBadgeColor}">${s.score}%</span>
+            </div>
+          `;
+          })
+          .join("");
+
+        renderSessionDetails();
+        lucide.createIcons();
+      }
+
+      function selectSession(sessionId) {
+        selectedSessionId = sessionId;
+        renderHistoryUI();
+      }
+
+      function renderSessionDetails() {
+        const sessions = getSavedSessions();
+        const cur = sessions.find((s) => s.id === selectedSessionId);
+        const detailListEl = document.getElementById("history-detail-list");
+        if (!cur) return;
+
+        document.getElementById("detail-session-title").innerText =
+          `Chi tiết phiên ${cur.date} • ${cur.timeRange}`;
+        document.getElementById("detail-session-sub").innerText =
+          `Thời lượng: ${cur.durationFormatted} | Điểm công thái học: ${cur.score}%`;
+        document.getElementById("detail-count-badge").innerText =
+          `${cur.violationsCount} vi phạm`;
+
+        if (!cur.violations || cur.violations.length === 0) {
+          detailListEl.innerHTML = `
+            <div class="p-8 text-center text-emerald-600 font-semibold bg-emerald-50/40 rounded-xl border border-emerald-100">
+               Phiên này bạn duy trì tư thế rất tốt, không có lần vi phạm vượt ngưỡng nào!
+            </div>
+          `;
+          return;
+        }
+
+        detailListEl.innerHTML = cur.violations
+          .map((v) => {
+            let dotColor = "bg-rose-500";
+            if (v.type.includes("vai")) dotColor = "bg-amber-500";
+            else if (v.type.includes("cổ") || v.type.includes("đầu"))
+              dotColor = "bg-sky-500";
+
+            return `
+            <div class="p-3 rounded-xl border border-slate-100 bg-slate-50/70 hover:bg-slate-100/60 transition flex items-center justify-between">
+              <div class="flex items-center gap-3">
+                <span class="w-2.5 h-2.5 rounded-full ${dotColor} shrink-0"></span>
+                <div>
+                  <h4 class="font-extrabold text-slate-800 text-xs">${v.type}</h4>
+                  <p class="text-[11px] text-slate-500 font-medium mt-0.5">${v.detail}</p>
+                </div>
+              </div>
+              <span class="font-mono text-slate-600 font-bold text-xs shrink-0">${v.time}</span>
+            </div>
+          `;
+          })
+          .join("");
+      }
+
+      function clearAllHistory() {
+        if (
+          confirm(
+            "Bạn có chắc chắn muốn xóa toàn bộ lịch sử các phiên làm việc?",
+          )
+        ) {
+          localStorage.removeItem("posture_sessions_history");
+          selectedSessionId = null;
+          renderHistoryUI();
+        }
+      }
+
+      function exportHistoryCSV() {
+        const sessions = getSavedSessions();
+        if (sessions.length === 0) {
+          alert("Chưa có lịch sử phiên để xuất báo cáo!");
+          return;
+        }
+
+        let csv =
+          "\uFEFFNgày,Khung Giờ,Thời Lượng,Điểm Công Thái Học,Số Lần Vi Phạm\n";
+        sessions.forEach((s) => {
+          csv += `"${s.date}","${s.timeRange}","${s.durationFormatted}",${s.score}%,${s.violationsCount}\n`;
+        });
+
+        const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.setAttribute("href", url);
+        link.setAttribute("download", `Posture_History_${Date.now()}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      }
+      function exportHistoryExcel() {
+        const sessions = getSavedSessions();
+        if (sessions.length === 0) {
+          alert("Chưa có lịch sử phiên để xuất báo cáo!");
+          return;
+        }
+
+        // Tạo bảng HTML giả lập file XLS mở chuẩn trên Microsoft Excel
+        let table = `
+          <meta charset="utf-8">
+          <table border="1">
+            <tr style="background-color: #0284c7; color: #ffffff; font-weight: bold;">
+              <th>ID Phiên</th>
+              <th>Ngày</th>
+              <th>Khung Giờ</th>
+              <th>Thời Lượng</th>
+              <th>Điểm Công Thái Học</th>
+              <th>Số Lần Vi Phạm</th>
+            </tr>
+        `;
+
+        sessions.forEach((s) => {
+          table += `
+            <tr>
+              <td>#${s.id}</td>
+              <td>${s.date}</td>
+              <td>${s.timeRange}</td>
+              <td>${s.durationFormatted}</td>
+              <td>${s.score}%</td>
+              <td>${s.violationsCount}</td>
+            </tr>
+          `;
+        });
+        table += `</table>`;
+
+        const blob = new Blob([table], {
+          type: "application/vnd.ms-excel;charset=utf-8;",
+        });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.setAttribute("href", url);
+        link.setAttribute("download", `Posture_History_${Date.now()}.xls`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      }
+
+      // Khởi tạo Posture Analytics Chart
+      const chartCtx = document
+        .getElementById("postureAnalyticsChart")
+        .getContext("2d");
+
+      const postureChart = new Chart(chartCtx, {
+        type: "line",
+        data: {
+          labels: [],
+          datasets: [
+            {
+              label: "Ngồi đúng",
+              data: [],
+              borderColor: "#10b981",
+              backgroundColor: "rgba(16, 185, 129, 0.08)",
+              borderWidth: 2.5,
+              tension: 0.35,
+              pointRadius: 4,
+              pointBackgroundColor: "#10b981",
+              fill: true,
+            },
+            {
+              label: "Ngồi sai",
+              data: [],
+              borderColor: "#f43f5e",
+              backgroundColor: "rgba(244, 63, 94, 0.05)",
+              borderWidth: 2.5,
+              tension: 0.35,
+              pointRadius: 4,
+              pointBackgroundColor: "#f43f5e",
+              fill: true,
+            },
+          ],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          interaction: { mode: "index", intersect: false },
+          plugins: { legend: { display: false } },
+          scales: {
+            x: {
+              grid: { display: false },
+              ticks: {
+                font: { family: "Plus Jakarta Sans", weight: "bold", size: 11 },
+                color: "#64748b",
+              },
+            },
+            y: {
+              min: 0,
+              max: 100,
+              ticks: {
+                stepSize: 25,
+                callback: (v) => v + "%",
+                font: { family: "Plus Jakarta Sans", weight: "bold", size: 11 },
+                color: "#64748b",
+              },
+              grid: { color: "#f1f5f9" },
+            },
+          },
+        },
+      });
+
+      setInterval(() => {
+        if (!isStreaming) return;
+        const total = currentMinuteGoodFrames + currentMinuteBadFrames;
+        if (total > 0) {
+          minuteIndex++;
+          const goodPct = Math.round((currentMinuteGoodFrames / total) * 100);
+          const badPct = 100 - goodPct;
+
+          chartEmptyPlaceholder.classList.add("hidden");
+
+          postureChart.data.labels.push(`P${minuteIndex}`);
+          postureChart.data.datasets[0].data.push(goodPct);
+          postureChart.data.datasets[1].data.push(badPct);
+          postureChart.update();
+
+          analyticsInsightText.innerText = `Đã ghi nhận dữ liệu ${minuteIndex} phút: Tỷ lệ ngồi chuẩn đạt ${goodPct}%.`;
+          document.getElementById("analytics-summary-good").innerText =
+            `${goodPct}%`;
+
+          currentMinuteGoodFrames = 0;
+          currentMinuteBadFrames = 0;
+        }
+      }, 60000);
+
+      function showSessionSummary() {
+        const stats = lastStatsData || {};
+        const timeStr = formatTime(localSessionSeconds);
+        const score = stats.ergonomics_score
+          ? Math.round(stats.ergonomics_score)
+          : 0;
+        const alerts = stats.alert_count || 0;
+
+        document.getElementById("modal-sum-time").innerText = timeStr;
+        document.getElementById("modal-sum-good").innerText = `${score}%`;
+        document.getElementById("modal-sum-alerts").innerText = `${alerts} lần`;
+        document.getElementById("modal-sum-break").innerText =
+          formatBreakTime(breakSeconds);
+        const ratingEl = document.getElementById("modal-sum-rating");
+        const adviceEl = document.getElementById("modal-sum-advice");
+        if (score >= 85) {
+          ratingEl.innerText = "Xếp loại: Rất tốt (Good)";
+          adviceEl.innerText =
+            "Bạn duy trì tư thế rất chuẩn xác trong suốt phiên làm việc. Hãy tiếp tục phát huy!";
+        } else if (score >= 70) {
+          ratingEl.innerText = "Xếp loại: Khá (Fair)";
+          adviceEl.innerText =
+            "Tư thế ở mức khá tốt. Chú ý giữ thẳng lưng hơn ở nửa sau phiên làm việc.";
+        } else {
+          ratingEl.innerText = "Xếp loại: Cần cải thiện (Poor)";
+          adviceEl.innerText =
+            "Bạn có xu hướng cúi đầu và gù lưng nhiều. Hãy nâng cao màn hình và nghỉ giải lao thường xuyên.";
+        }
+
+        modalSummary.classList.remove("hidden");
+      }
+
+      btnEndSession.addEventListener("click", () => {
+        if (isStreaming) toggleCamera();
+        saveCurrentSessionRecord();
+        showSessionSummary();
+      });
+
+      btnCloseSummary.addEventListener("click", () =>
+        modalSummary.classList.add("hidden"),
+      );
+      btnModalNewSession.addEventListener("click", () => {
+        modalSummary.classList.add("hidden");
+        resetSessionData();
+      });
+
+      function resetSessionData() {
+        if (localSessionSeconds >= 10) {
+          saveCurrentSessionRecord();
+        }
+        fetch("/api/reset_session", { method: "POST" });
+
+        lastStatsData = {};
+        latestPoseResult = null;
+        fpsWindowStart = performance.now();
+        fpsResultCount = 0;
+        document.getElementById("metric-fps").innerText = "--";
+        document.getElementById("metric-ping").innerText = "-- ms";
+        document.getElementById("metric-prob").innerText = "--";
+        const postureBadge = document.getElementById("badge-posture");
+        postureBadge.className =
+          "inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg text-[11px] font-extrabold bg-slate-100 text-slate-700 border border-slate-300 shadow-2xs";
+        postureBadge.innerHTML =
+          '<span class="w-1.5 h-1.5 rounded-full bg-slate-500"></span> Chờ khởi động';
+        document.getElementById("invalid-banner").classList.add("hidden");
+        postureChart.data.labels = [];
+        postureChart.data.datasets[0].data = [];
+        postureChart.data.datasets[1].data = [];
+        postureChart.update();
+        minuteIndex = 0;
+        currentMinuteGoodFrames = 0;
+        currentMinuteBadFrames = 0;
+        hasAlertedBreak = false;
+        chartEmptyPlaceholder.classList.remove("hidden");
+        analyticsInsightText.innerText =
+          "Chưa có dữ liệu phiên. Hãy bật webcam để bắt đầu ghi nhận biểu đồ.";
+        document.getElementById("analytics-summary-good").innerText =
+          "Chưa có dữ liệu";
+
+        localSessionSeconds = 0;
+        currentSessionViolations = [];
+        lastViolationTime = 0;
+        lastLoggedLabel = null;
+        sessionStartTime = null;
+
+        document.getElementById("stat-session-time").innerText = "00:00:00";
+        document.getElementById("stat-correct-detail").innerText = "--";
+
+        document.getElementById("stat-score").innerText = "--";
+        document.getElementById("stat-score-bar").style.width = "0%";
+        const scoreBadge = document.getElementById("badge-score-rating");
+        scoreBadge.innerText = "Chờ phiên";
+        scoreBadge.className =
+          "text-[9px] font-extrabold px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-700 uppercase tracking-wide border border-slate-300";
+
+        document.getElementById("stat-alerts").innerText = "0";
+        document.getElementById("stat-alerts").className =
+          "text-xl font-extrabold text-slate-900 tracking-tight transition";
+        document.getElementById("icon-alert-box").className =
+          "w-5 h-5 rounded-lg bg-slate-100 text-slate-600 flex items-center justify-center transition";
+
+        alertBanner.classList.add("hidden");
+
+        tipText2.innerText = "Đứng dậy vận động 2 phút sau mỗi 45 phút.";
+        tipText2.className =
+          "text-slate-700 font-semibold leading-relaxed transition-colors";
+        tipIcon2Box.className =
+          "p-1.5 rounded-lg bg-emerald-50 text-emerald-600 shrink-0 mt-0.5 border border-emerald-100 transition-colors";
+
+        if (breakClockInterval) {
+          clearInterval(breakClockInterval);
+          breakClockInterval = null;
+        }
+
+        breakSeconds = 0;
+        isOnBreak = false;
+
+        const breakEl = document.getElementById("modal-sum-break");
+        if (breakEl) breakEl.innerText = "00:00";
+      }
+
+      btnReset.addEventListener("click", resetSessionData);
+
+      // Settings Modal Handlers
+      btnOpenSettings.addEventListener("click", () =>
+        modalSettings.classList.remove("hidden"),
+      );
+      btnCloseSettings.addEventListener("click", () =>
+        modalSettings.classList.add("hidden"),
+      );
+      btnCancelSettings.addEventListener("click", () =>
+        modalSettings.classList.add("hidden"),
+      );
+      rangeConf.addEventListener("input", (e) => {
+        txtConfVal.innerText = e.target.value;
+      });
+
+      btnSaveSettings.addEventListener("click", async () => {
+        const s = Number(settingAlertSec.value) || 2;
+        try {
+          const response = await fetch("/api/set_alert_threshold", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ seconds: s }),
+          });
+
+          const data = await response.json();
+          if (!response.ok)
+            throw new Error(data.detail || "Lỗi cập nhật ngưỡng");
+
+          // CẬP NHẬT BIẾN NGƯỠNG ĐỘNG
+          currentAlertThresholdSec = Number(data.seconds);
+
+          modalSettings.classList.add("hidden");
+          txtAlertThresholdLabel.innerText = `> ${currentAlertThresholdSec.toFixed(1)}s`;
+        } catch (error) {
+          console.error(error);
+        }
+      });
+
+      // Dark / Light Mode Toggle
+      btnThemeToggle.addEventListener("click", () => {
+        darkMode = !darkMode;
+        document.body.classList.toggle("dark-mode", darkMode);
+        btnThemeToggle.innerHTML = darkMode
+          ? '<i data-lucide="sun" class="w-4 h-4"></i>'
+          : '<i data-lucide="moon" class="w-4 h-4"></i>';
+        lucide.createIcons();
+        localStorage.setItem("darkMode", darkMode);
+      });
+
+      // Skeleton & Sound
+      btnToggleSkeleton.addEventListener("click", () => {
+        showSkeleton = !showSkeleton;
+        document.getElementById("btn-skeleton-text").innerText = showSkeleton
+          ? "Ẩn Khung xương"
+          : "Hiện Khung xương";
+      });
+
+      document
+        .getElementById("btn-sound-toggle")
+        .addEventListener("click", function () {
+          soundEnabled = !soundEnabled;
+          this.classList.toggle("text-rose-500", !soundEnabled);
+          this.classList.toggle("bg-rose-50", !soundEnabled);
+        });
+
+      const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      function playBeep() {
+        if (!soundEnabled) return;
+        if (audioCtx.state === "suspended") audioCtx.resume();
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.frequency.setValueAtTime(800, audioCtx.currentTime);
+        gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+        osc.start();
+        osc.stop(audioCtx.currentTime + 0.25);
+      }
+
+      async function loadModelInfo() {
+        try {
+          const res = await fetch("/api/info");
+          if (res.ok) {
+            const data = await res.json();
+            document.getElementById("info-model-label").innerText =
+              data.model_name || "SVM RBF Tuned";
+            document.getElementById("info-features-count").innerText =
+              (data.features_count || 29) + " Features";
+          }
+        } catch (e) {
+          console.error(e);
+        }
+      }
+      loadModelInfo();
+
+      function initWebSocket() {
+        const loc = window.location;
+        const wsUri =
+          (loc.protocol === "https:" ? "wss://" : "ws://") +
+          loc.host +
+          "/ws/stream";
+        ws = new WebSocket(wsUri);
+
+        ws.onopen = () => {
+          connStatus.innerHTML =
+            '<span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span><span>Hệ thống sẵn sàng</span>';
+          connStatus.className =
+            "inline-flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-bold rounded-full bg-white/95 text-emerald-800 border border-emerald-300 shadow-2xs";
+          sendFrame();
+        };
+
+        ws.onclose = () => {
+          connStatus.innerHTML =
+            '<span class="w-1.5 h-1.5 rounded-full bg-slate-500"></span><span>Mất kết nối</span>';
+          connStatus.className =
+            "inline-flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-bold rounded-full bg-slate-100 text-slate-700 border border-slate-300";
+          frameInFlight = false;
+          setTimeout(initWebSocket, 2000);
+        };
+
+        ws.onmessage = (event) => {
+          const data = JSON.parse(event.data);
+          const isFrameResult = data.client_time !== undefined;
+          if (isFrameResult) {
+            frameInFlight = false;
+            const ping = Math.round(performance.now() - data.client_time);
+            if (ping >= 0) {
+              document.getElementById("metric-ping").innerText = `${ping} ms`;
+            }
+
+            if (data.status !== "ERROR") fpsResultCount++;
+            const now = performance.now();
+            const elapsed = now - fpsWindowStart;
+            if (elapsed >= 1000) {
+              const actualFps = (fpsResultCount * 1000) / elapsed;
+              document.getElementById("metric-fps").innerText =
+                actualFps.toFixed(1);
+              fpsWindowStart = now;
+              fpsResultCount = 0;
+            }
+
+            if (Object.prototype.hasOwnProperty.call(data, "keypoints")) {
+              latestPoseResult = data;
+            }
+          }
+          if (isStreaming) updateUI(data);
+          if (isFrameResult) sendFrame();
+        };
+      }
+
+      async function toggleCamera() {
+        if (isStreaming) {
+          if (stream) {
+            stream.getTracks().forEach((t) => t.stop());
+            stream = null;
+          }
+          latestPoseResult = null;
+          fpsResultCount = 0;
+          if (sessionClockInterval) {
+            clearInterval(sessionClockInterval);
+            sessionClockInterval = null;
+          }
+          if (localSessionSeconds >= 45 * 60) {
+            startBreakTimer();
+          }
+          isStreaming = false;
+          btnCamText.innerText = "Bật Webcam";
+          camPlaceholder.classList.remove("hidden");
+          alertBanner.classList.add("hidden");
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          document.getElementById("analytics-summary-status").innerText =
+            "Tạm dừng";
+          return;
+        }
+
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({
+            video: { width: 640, height: 480 },
+          });
+          video.srcObject = stream;
+          video.play();
+          isStreaming = true;
+          sessionStartTime = new Date();
+          btnCamText.innerText = "Tắt Webcam";
+          camPlaceholder.classList.add("hidden");
+          document.getElementById("analytics-summary-status").innerText =
+            "Đang hoạt động";
+          if (isOnBreak) stopBreakTimer();
+
+          video.onloadedmetadata = () => {
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            captureCanvas.width = video.videoWidth;
+            captureCanvas.height = video.videoHeight;
+            fpsWindowStart = performance.now();
+            fpsResultCount = 0;
+            sendFrame();
+          };
+
+          if (!sessionClockInterval) {
+            sessionClockInterval = setInterval(() => {
+              localSessionSeconds++;
+              document.getElementById("stat-session-time").innerText =
+                formatTime(localSessionSeconds);
+            }, 1000);
+          }
+        } catch (err) {
+          alert("Lỗi khi mở webcam: " + err.message);
+        }
+      }
+
+      btnToggleCam.addEventListener("click", toggleCamera);
+      btnCamPlaceholder.addEventListener("click", toggleCamera);
+
+      function sendFrame() {
+        if (
+          frameInFlight ||
+          !isStreaming ||
+          !ws ||
+          ws.readyState !== WebSocket.OPEN ||
+          video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA ||
+          captureCanvas.width === 0 ||
+          captureCanvas.height === 0
+        )
+          return;
+        captureCtx.drawImage(
+          video,
+          0,
+          0,
+          captureCanvas.width,
+          captureCanvas.height,
+        );
+        const b64 = captureCanvas.toDataURL("image/jpeg", 0.55);
+        frameInFlight = true;
+        ws.send(
+          JSON.stringify({
+            image: b64,
+            client_time: performance.now(),
+          }),
+        );
+      }
+
+      function renderVideoFrame() {
+        if (
+          isStreaming &&
+          video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA &&
+          canvas.width > 0 &&
+          canvas.height > 0
+        ) {
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+          if (latestPoseResult) drawSkeleton(latestPoseResult);
+        }
+        requestAnimationFrame(renderVideoFrame);
+      }
+      // if (res.bbox) {
+      //   const [x1, y1, x2, y2] = res.bbox;
+      //   ctx.strokeStyle =
+      //     res.smoothed_label === "correct"
+      //       ? "rgba(16, 185, 129, 0.9)"
+      //       : "rgba(239, 68, 68, 0.9)";
+      //   ctx.lineWidth = 2.5;
+      //   ctx.strokeRect(x1, y1, x2 - x1, y2 - y1);
+      // }
+
+      // vẽ các khung xương
+      function drawSkeleton(res) {
+        if (!showSkeleton || !res.keypoints) return;
+        const kps = res.keypoints;
+
+        ctx.save();
+        ctx.lineCap = "round";
+        ctx.lineJoin = "round";
+
+        // 1. Đường nối 2 vai (Màu xanh cyan công nghệ)
+        if (kps.left_shoulder && kps.right_shoulder) {
+          ctx.beginPath();
+          ctx.moveTo(kps.left_shoulder[0], kps.left_shoulder[1]);
+          ctx.lineTo(kps.right_shoulder[0], kps.right_shoulder[1]);
+          ctx.strokeStyle = "#38bdf8";
+          ctx.lineWidth = 4;
+          ctx.shadowColor = "rgba(56, 189, 248, 0.6)";
+          ctx.shadowBlur = 6;
+          ctx.stroke();
+        }
+
+        // 2. Đường nối 2 mắt (Màu tím nhẹ)
+        if (kps.left_eye && kps.right_eye) {
+          ctx.beginPath();
+          ctx.moveTo(kps.left_eye[0], kps.left_eye[1]);
+          ctx.lineTo(kps.right_eye[0], kps.right_eye[1]);
+          ctx.strokeStyle = "#c084fc";
+          ctx.lineWidth = 3;
+          ctx.shadowColor = "rgba(192, 132, 252, 0.6)";
+          ctx.shadowBlur = 5;
+          ctx.stroke();
+        }
+
+        // 3. Đường trục cơ thể: Nối từ mũi (hoặc trung điểm mắt) xuống trung điểm vai
+        if (kps.nose && kps.left_shoulder && kps.right_shoulder) {
+          const shoulderMidX =
+            (kps.left_shoulder[0] + kps.right_shoulder[0]) / 2;
+          const shoulderMidY =
+            (kps.left_shoulder[1] + kps.right_shoulder[1]) / 2;
+
+          ctx.beginPath();
+          ctx.moveTo(kps.nose[0], kps.nose[1]);
+          ctx.lineTo(shoulderMidX, shoulderMidY);
+          ctx.strokeStyle = "rgba(16, 185, 129, 0.85)"; // Xanh lá cây nhạt biểu thị trục cột sống
+          ctx.lineWidth = 2.5;
+          ctx.setLineDash([4, 3]); // Nét đứt biểu thị trục tham chiếu
+          ctx.stroke();
+          ctx.setLineDash([]); // Reset nét đứt
+        }
+
+        // 4. Các điểm khớp chấm tròn (Keypoints)
+        for (const [name, pt] of Object.entries(kps)) {
+          ctx.beginPath();
+          ctx.arc(pt[0], pt[1], 5, 0, 2 * Math.PI);
+          ctx.fillStyle = "#ffffff";
+          ctx.shadowColor = "rgba(79, 70, 229, 0.8)";
+          ctx.shadowBlur = 8;
+          ctx.fill();
+
+          ctx.lineWidth = 2;
+          ctx.strokeStyle = "#4f46e5";
+          ctx.stroke();
+        }
+
+        ctx.restore();
+      }
+
+      function updateUI(res) {
+        // [V03 MỚI] XỬ LÝ TIẾN TRÌNH HIỆU CHUẨN PERSONAL BASELINE
+        const toast = document.getElementById("toast-calibrate");
+        const toastText = document.getElementById("toast-calibrate-text");
+
+        // 1. Nếu hệ thống yêu cầu hiệu chuẩn mốc chuẩn ban đầu
+        if (res.status === "CALIBRATION_REQUIRED") {
+          if (toast && toastText) {
+            toastText.innerText =
+              "⚠️ Hãy ngồi thẳng lưng và nhấn phím [C] để hiệu chuẩn mốc chuẩn!";
+            toast.className =
+              "absolute top-4 inset-x-8 bg-gradient-to-r from-amber-600 to-orange-600 text-white text-xs py-2.5 px-4 rounded-xl shadow-lg border border-white/20 flex items-center justify-between z-30 transition-all";
+            toast.classList.remove("hidden");
+          }
+          const badgePosture = document.getElementById("badge-posture");
+          if (badgePosture) {
+            badgePosture.className =
+              "inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg text-[11px] font-extrabold bg-amber-100 text-amber-800 border border-amber-300 transition-all";
+            badgePosture.innerHTML =
+              '<span class="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span> Chờ hiệu chuẩn [C]';
+          }
+          return;
+        }
+
+        // 2. Nếu đang trong tiến trình thu đủ 30 mẫu Baseline
+        if (res.status === "CALIBRATING") {
+          if (toast && toastText) {
+            toastText.innerText = `⏳ ${res.message || "Đang thu thập mốc chuẩn... Giữ nguyên tư thế ngồi thẳng!"}`;
+            toast.className =
+              "absolute top-4 inset-x-8 bg-gradient-to-r from-sky-600 to-indigo-600 text-white text-xs py-2.5 px-4 rounded-xl shadow-lg border border-white/20 flex items-center justify-between z-30 animate-pulse transition-all";
+            toast.classList.remove("hidden");
+          }
+          const badgePosture = document.getElementById("badge-posture");
+          if (badgePosture) {
+            badgePosture.className =
+              "inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg text-[11px] font-extrabold bg-sky-100 text-sky-800 border border-sky-300 transition-all";
+            badgePosture.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-sky-500 animate-ping"></span> Thu baseline...`;
+          }
+          return;
+        }
+
+        // 3. Khi vừa hoàn thành hiệu chuẩn thành công
+        if (res.status === "CALIBRATED") {
+          if (toast && toastText) {
+            toastText.innerText =
+              "✅ Đã thiết lập mốc chuẩn cá nhân (Baseline) thành công! Bắt đầu giám sát.";
+            toast.className =
+              "absolute top-4 inset-x-8 bg-gradient-to-r from-emerald-600 to-teal-600 text-white text-xs py-2.5 px-4 rounded-xl shadow-lg border border-white/20 flex items-center justify-between z-30 transition-all";
+            setTimeout(() => {
+              toast.classList.add("hidden");
+            }, 3000);
+          }
+        }
+
+        // -----------------------------------
+        const stats = res.stats || {};
+        lastStatsData = stats;
+        const label = res.smoothed_label;
+        const validPostureLabels = new Set([
+          "correct",
+          "forward_slouch",
+          "lean_left",
+          "lean_right",
+        ]);
+        const neutralStatuses = new Set([
+          "LOW_CONFIDENCE",
+          "CALIBRATION_SAMPLE_REJECTED",
+          "CALIBRATED",
+          "ERROR",
+        ]);
+        const hasData =
+          (stats.correct_frames || 0) + (stats.bad_frames || 0) > 0;
+
+        if (isStreaming && res.status === "OK" && validPostureLabels.has(label)) {
+          if (label === "correct") {
+            currentMinuteGoodFrames++;
+          } else {
+            currentMinuteBadFrames++;
+          }
+        }
+
+        // 1. Điểm công thái học
+        const scoreVal = stats.ergonomics_score;
+        const scoreEl = document.getElementById("stat-score");
+        const ratingBadge = document.getElementById("badge-score-rating");
+        const scoreBar = document.getElementById("stat-score-bar");
+
+        if (!hasData || scoreVal === undefined || scoreVal === null) {
+          scoreEl.innerText = "--";
+          ratingBadge.innerText = "Chờ phiên";
+          ratingBadge.className =
+            "text-[9px] font-extrabold px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-700 uppercase tracking-wide border border-slate-300";
+          scoreBar.style.width = "0%";
+        } else {
+          scoreEl.innerText = Math.round(scoreVal) + "%";
+          scoreBar.style.width = scoreVal + "%";
+
+          if (scoreVal >= 85) {
+            ratingBadge.innerText = "Good";
+            ratingBadge.className =
+              "text-[9px] font-extrabold px-1.5 py-0.5 rounded-md bg-emerald-100 text-emerald-800 uppercase tracking-wide border border-emerald-300";
+            scoreBar.className =
+              "bg-emerald-500 h-1.5 rounded-full transition-all duration-300";
+          } else if (scoreVal >= 70) {
+            ratingBadge.innerText = "Fair";
+            ratingBadge.className =
+              "text-[9px] font-extrabold px-1.5 py-0.5 rounded-md bg-blue-100 text-blue-800 uppercase tracking-wide border border-blue-300";
+            scoreBar.className =
+              "bg-blue-500 h-1.5 rounded-full transition-all duration-300";
+          } else {
+            ratingBadge.innerText = "Poor";
+            ratingBadge.className =
+              "text-[9px] font-extrabold px-1.5 py-0.5 rounded-md bg-rose-100 text-rose-800 uppercase tracking-wide border border-rose-300";
+            scoreBar.className =
+              "bg-rose-500 h-1.5 rounded-full transition-all duration-300";
+          }
+        }
+
+        // 2. Cảnh báo
+        const alertCount = stats.alert_count || 0;
+        const alertsText = document.getElementById("stat-alerts");
+        const alertIconBox = document.getElementById("icon-alert-box");
+        alertsText.innerText = alertCount;
+
+        if (alertCount > 0) {
+          alertsText.className =
+            "text-xl font-extrabold text-rose-600 tracking-tight transition";
+          alertIconBox.className =
+            "w-5 h-5 rounded-lg bg-rose-100 text-rose-700 flex items-center justify-center transition";
+        } else {
+          alertsText.className =
+            "text-xl font-extrabold text-slate-900 tracking-tight transition";
+          alertIconBox.className =
+            "w-5 h-5 rounded-lg bg-slate-100 text-slate-600 flex items-center justify-center transition";
+        }
+
+        // 3. Thời gian phiên
+        const correctSec = Math.round(stats.correct_seconds || 0);
+        document.getElementById("stat-correct-detail").innerText = hasData
+          ? `${correctSec}s (${Math.round(scoreVal || 100)}%)`
+          : "--";
+
+        if (localSessionSeconds >= 45 * 60) {
+          tipText2.innerText =
+            "⚠️ Bạn đã ngồi hơn 45 phút! Hãy đứng dậy đi lại và uống nước.";
+          tipText2.className =
+            "text-amber-700 font-extrabold leading-relaxed transition-colors";
+          tipIcon2Box.className =
+            "p-1.5 rounded-lg bg-amber-100 text-amber-700 shrink-0 mt-0.5 border border-amber-300 animate-pulse transition-colors";
+
+          if (!hasAlertedBreak) {
+            playBeep();
+            hasAlertedBreak = true;
+          }
+        } else {
+          const remainingMins = Math.ceil((45 * 60 - localSessionSeconds) / 60);
+          tipText2.innerText = `Đứng dậy vận động 2 phút sau mỗi 45 phút (còn ~${remainingMins} phút).`;
+          tipText2.className =
+            "text-slate-700 font-semibold leading-relaxed transition-colors";
+          tipIcon2Box.className =
+            "p-1.5 rounded-lg bg-emerald-50 text-emerald-600 shrink-0 mt-0.5 border border-emerald-100 transition-colors";
+        }
+
+        // 4. Badge tư thế & Gợi ý (Đã thêm xử lý Invalid Detection)
+        const badgePosture = document.getElementById("badge-posture");
+        const invalidBanner = document.getElementById("invalid-banner");
+
+        const isInvalid =
+          res.is_valid === false ||
+          neutralStatuses.has(res.status) ||
+          !label ||
+          label === "evaluating" ||
+          label === "head_turned" ||
+          label === "invalid" ||
+          label === "unconfident";
+
+        if (res.status === "NO_PERSON" || label === "no_person") {
+          if (invalidBanner) invalidBanner.classList.add("hidden");
+          badgePosture.className =
+            "inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg text-[11px] font-extrabold bg-slate-100 text-slate-700 border border-slate-300 transition-all";
+          badgePosture.innerHTML =
+            '<span class="w-1.5 h-1.5 rounded-full bg-slate-500"></span> Trống';
+          alertBanner.classList.add("hidden");
+          tipText1.innerText =
+            "Hãy ngồi vào khung hình để camera bắt đầu nhận diện.";
+        } else if (isInvalid) {
+          if (invalidBanner) invalidBanner.classList.remove("hidden");
+          alertBanner.classList.add("hidden");
+          badgePosture.className =
+            "inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg text-[11px] font-extrabold bg-amber-100 text-amber-800 border border-amber-300 transition-all";
+          badgePosture.innerHTML =
+            '<span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span> Chưa đủ mẫu';
+          tipText1.innerText =
+            "⚠️ Hãy điều chỉnh góc camera để thấy rõ mặt và 2 bên vai của bạn.";
+        } else if (label === "correct") {
+          if (invalidBanner) invalidBanner.classList.add("hidden");
+          badgePosture.className =
+            "inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg text-[11px] font-extrabold bg-emerald-100 text-emerald-800 border border-emerald-300 shadow-2xs transition-all";
+          badgePosture.innerHTML =
+            '<span class="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse"></span> Chuẩn';
+          alertBanner.classList.add("hidden");
+          tipText1.innerText =
+            "Tư thế rất tốt! Giữ vững khoảng cách mắt tới màn hình.";
+        } else if (validPostureLabels.has(label)) {
+          if (invalidBanner) invalidBanner.classList.add("hidden");
+          badgePosture.className =
+            "inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg text-[11px] font-extrabold bg-rose-100 text-rose-800 border border-rose-300 shadow-2xs transition-all";
+          badgePosture.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-rose-600 animate-ping"></span> Sai: ${label}`;
+
+          if (
+            label.includes("cúi") ||
+            label.includes("head") ||
+            (res.angles && res.angles.head_gravity_angle > 35)
+          ) {
+            tipText1.innerText =
+              "Bạn đang cúi đầu quá thấp! Hãy nâng màn hình lên ngang tầm mắt hoặc kéo cằm về sau.";
+          } else if (
+            label.includes("nghiêng") ||
+            (res.angles && Math.abs(res.angles.shoulder_angle) > 5)
+          ) {
+            tipText1.innerText =
+              "Hai vai đang bị lệch! Thả lỏng vai và tựa đều hai cẳng tay lên mặt bàn.";
+          } else if (label.includes("gù") || label.includes("slouch")) {
+            tipText1.innerText =
+              "Bạn đang bị gù lưng! Kéo mông sát vào góc ghế và tựa lưng thẳng.";
+          } else {
+            tipText1.innerText =
+              "Phát hiện ngồi sai tư thế! Hãy ngồi thẳng lưng và điều chỉnh lại khoảng cách với bàn.";
+          }
+        }
+
+        // Cập nhật 3 góc đo sinh trắc
+        const angles = res.angles || res.raw_features || {};
+        if (angles) {
+          // Bắt theo tên V03 mới, nếu không có thì fallback về tên cũ
+          const rawSh = angles.shoulder_roll_deg ?? angles.shoulder_angle ?? 0;
+          const rawGr = angles.neck_pitch_deg ?? angles.head_gravity_angle ?? 0;
+          const rawHb =
+            angles.head_shoulder_roll_diff_deg ?? angles.head_body_angle ?? 0;
+
+          const sh =
+            typeof rawSh === "number"
+              ? rawSh.toFixed(1)
+              : Number(rawSh).toFixed(1);
+          const gr =
+            typeof rawGr === "number"
+              ? rawGr.toFixed(1)
+              : Number(rawGr).toFixed(1);
+          const hb =
+            typeof rawHb === "number"
+              ? rawHb.toFixed(1)
+              : Number(rawHb).toFixed(1);
+
+          document.getElementById("angle-shoulder").innerText =
+            (Number(sh) > 0 ? `+${sh}` : sh) + "°";
+          document.getElementById("angle-gravity").innerText = gr + "°";
+          document.getElementById("angle-head-body").innerText = hb + "°";
+
+          // Cập nhật thanh đo (progress bar)
+          document.getElementById("bar-shoulder").style.width =
+            Math.min(100, Math.max(0, 50 + Number(sh) * 2.5)) + "%";
+          document.getElementById("bar-gravity").style.width =
+            Math.min(100, Math.max(0, (Number(gr) / 45) * 100)) + "%";
+          document.getElementById("bar-head-body").style.width =
+            Math.min(100, Math.max(0, 50 + Number(hb) * 2)) + "%";
+        }
+
+        document.getElementById("metric-prob").innerText = Number.isFinite(
+          res.display_confidence,
+        )
+          ? Math.round(res.display_confidence * 100) + "%"
+          : "--";
+
+        // Ghi nhận sự kiện vi phạm vào danh sách chi tiết của phiên
+        if (res.trigger_alert) {
+          alertBanner.classList.remove("hidden");
+          playBeep();
+
+          const nowSec = Date.now();
+          if (nowSec - lastViolationTime > 3000) {
+            // Chống lặp trong 3s
+            lastViolationTime = nowSec;
+            const now = new Date();
+            const timeStr = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+            const fullTimeStr = now.toLocaleTimeString("vi-VN");
+
+            const sh = res.angles
+              ? Math.abs(res.angles.shoulder_angle).toFixed(1)
+              : "0";
+            const gr = res.angles
+              ? res.angles.head_gravity_angle.toFixed(1)
+              : "0";
+
+            let vType = "Gù lưng kéo dài";
+            let vDetail = `Lệch cột sống liên tục trong > 2.0 giây`;
+
+            if (gr > 35) {
+              vType = "Nghiêng cổ / Cúi đầu";
+              vDetail = `${fullTimeStr} • Lệch ${gr}° trong > ${currentAlertThresholdSec.toFixed(1)}s`;
+            } else if (sh > 5) {
+              vType = "Lệch vai";
+              vDetail = `${fullTimeStr} • Lệch ${sh}° trong > ${currentAlertThresholdSec.toFixed(1)}s`;
+            } else {
+              vDetail = `${fullTimeStr} • Lệch tư thế trong > ${currentAlertThresholdSec.toFixed(1)}s`;
+            }
+
+            currentSessionViolations.unshift({
+              time: timeStr,
+              type: vType,
+              detail: vDetail,
+            });
+          }
+        }
+      }
+
+      function exportReportCSV() {
+        const stats = lastStatsData || {};
+        const csvContent =
+          "data:text/csv;charset=utf-8," +
+          "ThoiGian,TongGiay,NgayTao,DiemCongThaiHoc,SoLanCanhBao\n" +
+          `${new Date().toLocaleTimeString()},${localSessionSeconds},${new Date().toLocaleDateString("vi-VN")},${stats.ergonomics_score || 0}%,${stats.alert_count || 0}`;
+        const encodedUri = encodeURI(csvContent);
+        const link = document.createElement("a");
+        link.setAttribute("href", encodedUri);
+        link.setAttribute("download", `Posture_Summary_${Date.now()}.csv`);
+        document.body.appendChild(link);
+        link.click();
+      }
+
+      btnModalCsv.addEventListener("click", exportReportCSV);
+
+      initWebSocket();
+      requestAnimationFrame(renderVideoFrame);
+      renderHistoryUI(); // Khởi tạo danh sách lịch sử khi tải trang
+
+      // Phím tắt Calibration & Điều khiển hệ thống
+      window.addEventListener("keydown", (e) => {
+        if (["INPUT", "TEXTAREA"].includes(document.activeElement.tagName))
+          return;
+
+        const key = e.key.toUpperCase();
+        // XỬ LÝ PHÍM C: HIỆU CHUẨN MỐC TƯ THẾ (CALIBRATION)
+        if (key === "C") {
+          const toast = document.getElementById("toast-calibrate");
+          const toastText = document.getElementById("toast-calibrate-text");
+
+          if (!isStreaming) {
+            if (toast && toastText) {
+              toastText.innerText =
+                "Vui lòng bật webcam trước khi thực hiện hiệu chuẩn!";
+              toast.className =
+                "absolute top-4 inset-x-8 bg-gradient-to-r from-amber-600 to-orange-600 text-white text-xs py-2.5 px-4 rounded-xl shadow-lg border border-white/20 flex items-center justify-between z-30 transition-all";
+              toast.classList.remove("hidden");
+              setTimeout(() => toast.classList.add("hidden"), 3000);
+            }
+            return;
+          }
+
+          if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ action: "calibrate" }));
+          }
+          playBeep();
+
+          if (toast && toastText) {
+            toastText.innerText =
+              "🎯 Bắt đầu thu thập mốc chuẩn... Vui lòng ngồi thẳng lưng trong 2 giây!";
+            toast.className =
+              "absolute top-4 inset-x-8 bg-gradient-to-r from-sky-600 to-indigo-600 text-white text-xs py-2.5 px-4 rounded-xl shadow-lg border border-white/20 flex items-center justify-between z-30 animate-pulse transition-all";
+            toast.classList.remove("hidden");
+          }
+        } else if (key === "R") {
+          resetSessionData();
+        } else if (key === "Q" || e.key === "Escape") {
+          if (isStreaming) {
+            toggleCamera();
+            saveCurrentSessionRecord();
+          }
+        }
+      });
+    </script>
+  </body>
+</html>
