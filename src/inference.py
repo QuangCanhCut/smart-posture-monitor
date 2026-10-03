@@ -39,6 +39,7 @@ class PostureInferenceEngine:
         metadata_path: Path,
         yolo_path: Optional[Path] = None,
         calibration_samples: int = 30,
+        device: Optional[str] = None,
     ) -> None:
         if calibration_samples <= 0:
             raise ValueError(
@@ -56,6 +57,7 @@ class PostureInferenceEngine:
         self.detector = PoseDetector(
             model_path=yolo_path,
             person_conf_threshold=0.45,
+            device=device,
         )
 
         self.extractor = FeatureExtractor(

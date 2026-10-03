@@ -4,6 +4,30 @@ import numpy as np
 from ultralytics import YOLO
 
 
+def _resolve_device(device: str | None = None) -> str | None:
+    """
+    Xác định thiết bị chạy YOLO phù hợp.
+    Nếu device được chỉ định rõ (ví dụ: 'cpu', 'cuda', '0'), sử dụng trực tiếp.
+    Nếu device là None hoặc 'auto':
+        Kiểm tra xem CUDA hiện tại có chạy được kernel không (tránh lỗi
+        cudaErrorNoKernelImageForDevice trên các GPU mới như RTX 50-series sm_120
+        với bản PyTorch cũ). Nếu không tương thích, tự động fallback về 'cpu'.
+    """
+    if device is not None and device != "auto":
+        return device
+
+    try:
+        import torch
+
+        if torch.cuda.is_available():
+            test_tensor = torch.zeros(1, device="cuda")
+            _ = test_tensor + 1
+            return None
+        return "cpu"
+    except Exception:
+        return "cpu"
+
+
 class PoseDetector:
     """
     Phát hiện pose của người phù hợp nhất với chủ thể chính,
@@ -37,7 +61,8 @@ class PoseDetector:
     def __init__(
         self,
         model_path=None,
-        person_conf_threshold=0.5
+        person_conf_threshold=0.5,
+        device=None,
     ):
         """
         model_path:
@@ -48,6 +73,9 @@ class PoseDetector:
 
         person_conf_threshold:
             Ngưỡng confidence tối thiểu của person.
+
+        device:
+            Thiết bị inference ('cpu', 'cuda', hoặc None/auto).
         """
 
         # =====================================================
@@ -95,6 +123,7 @@ class PoseDetector:
         self.person_conf_threshold = (
             person_conf_threshold
         )
+        self.device = _resolve_device(device)
 
     # =========================================================
     # Main function
@@ -156,11 +185,24 @@ class PoseDetector:
         # 2. Chạy YOLO Pose
         # =====================================================
 
-        results = self.model.predict(
-            source=frame,
-            conf=self.person_conf_threshold,
-            verbose=False
-        )
+        predict_kwargs = {
+            "source": frame,
+            "conf": self.person_conf_threshold,
+            "verbose": False,
+        }
+        if self.device is not None:
+            predict_kwargs["device"] = self.device
+
+        try:
+            results = self.model.predict(**predict_kwargs)
+        except Exception as error:
+            err_msg = str(error)
+            if "CUDA" in err_msg or "kernel image" in err_msg or "AcceleratorError" in type(error).__name__:
+                self.device = "cpu"
+                predict_kwargs["device"] = "cpu"
+                results = self.model.predict(**predict_kwargs)
+            else:
+                raise
 
         if len(results) == 0:
             return None

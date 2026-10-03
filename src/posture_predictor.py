@@ -29,9 +29,11 @@ class PosturePredictor:
 
     def __init__(
         self,
-        model_path: Path,
-        metadata_path: Path,
+        model_path: Path | str,
+        metadata_path: Path | str,
     ) -> None:
+        model_path = Path(model_path)
+        metadata_path = Path(metadata_path)
         self.metadata = self._load_metadata(metadata_path)
 
         feature_columns = (
