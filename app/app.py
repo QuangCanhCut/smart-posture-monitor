@@ -1,6 +1,7 @@
 """
 Smart Posture Monitor - Shadcn UI Dashboard
 Web Application built with FastAPI, YOLO Pose, SVM RBF, and Temporal Smoothing (V03).
+python -m uvicorn app.app:app --reload
 """
 
 from __future__ import annotations
