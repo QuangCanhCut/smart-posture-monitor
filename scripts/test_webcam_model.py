@@ -251,8 +251,13 @@ def run_webcam(
         metadata_path=metadata_path,
         yolo_path=yolo_path,
         calibration_samples=calibration_samples,
-        device=device,
     )
+
+    # ``device`` là tùy chọn của PoseDetector, không phải tham số
+    # khởi tạo của PostureInferenceEngine. Engine đã tự chọn thiết bị
+    # khi device là None/auto; chỉ ghi đè khi CLI yêu cầu rõ ràng.
+    if device not in (None, "auto"):
+        engine.detector.device = device
 
     capture = cv2.VideoCapture(camera_index)
 
