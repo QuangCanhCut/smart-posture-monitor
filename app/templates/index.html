@@ -8,12 +8,12 @@
       rel="icon"
       href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🐧</text></svg>"
     />
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="/static/vendor/tailwindcss-browser.js"></script>
+    <script src="/static/vendor/lucide.js"></script>
     <!-- Chart.js cho Posture Analytics -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="/static/vendor/chart.js"></script>
     <style>
-      @import url("https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap");
+      @import url("/static/vendor/plus-jakarta-sans.css");
       body {
         font-family: "Plus Jakarta Sans", sans-serif;
       }
@@ -173,7 +173,8 @@
       body.dark-mode #metric-fps {
         color: #34d399 !important;
       }
-      body.dark-mode #metric-ping {
+      body.dark-mode #metric-server-latency,
+      body.dark-mode #metric-round-trip {
         color: #33a9dc !important;
       }
       body.dark-mode button:hover,
@@ -241,7 +242,8 @@
       body.dark-mode #metric-fps {
         color: #34d399 !important; /* FPS xanh neon */
       }
-      body.dark-mode #metric-ping {
+      body.dark-mode #metric-server-latency,
+      body.dark-mode #metric-round-trip {
         color: #38bdf8 !important; /* Ping xanh dương */
       }
 
@@ -487,12 +489,16 @@
                         class="text-slate-900 font-extrabold"
                         >--</span
                       >
-                      FPS
+                      AI FPS
                     </span>
                     <span class="text-slate-400">|</span>
-                    <span id="metric-ping" class="text-slate-700 model-name"
-                      >0 ms</span
-                    >
+                    <span class="text-slate-700 model-name">
+                      Server <span id="metric-server-latency">-- ms</span>
+                    </span>
+                    <span class="text-slate-400">|</span>
+                    <span class="text-slate-700 model-name">
+                      E2E <span id="metric-round-trip">-- ms</span>
+                    </span>
                   </div>
                 </div>
 
@@ -1695,11 +1701,18 @@
 
       let stream = null;
       let ws = null;
+      let reconnectTimer = null;
+      let renderFrameRequestId = null;
+      let isPageUnloading = false;
       let isStreaming = false;
       let frameInFlight = false;
       let latestPoseResult = null;
       let fpsWindowStart = performance.now();
       let fpsResultCount = 0;
+      let latestRoundTripMs = null;
+      let latestServerProcessingMs = null;
+      let lastStatsRenderAt = 0;
+      let lastVideoRenderAt = 0;
       let showSkeleton = true;
       let soundEnabled = true;
       let lastLoggedLabel = null;
@@ -2145,6 +2158,11 @@
           postureChart.data.labels.push(`P${minuteIndex}`);
           postureChart.data.datasets[0].data.push(goodPct);
           postureChart.data.datasets[1].data.push(badPct);
+          // Chỉ giữ 2 giờ gần nhất trên canvas; thống kê phiên vẫn đầy đủ ở backend.
+          if (postureChart.data.labels.length > 120) {
+            postureChart.data.labels.shift();
+            postureChart.data.datasets.forEach((dataset) => dataset.data.shift());
+          }
           postureChart.update();
 
           analyticsInsightText.innerText = `Đã ghi nhận dữ liệu ${minuteIndex} phút: Tỷ lệ ngồi chuẩn đạt ${goodPct}%.`;
@@ -2212,8 +2230,12 @@
         latestPoseResult = null;
         fpsWindowStart = performance.now();
         fpsResultCount = 0;
+        latestRoundTripMs = null;
+        latestServerProcessingMs = null;
+        lastStatsRenderAt = 0;
         document.getElementById("metric-fps").innerText = "--";
-        document.getElementById("metric-ping").innerText = "-- ms";
+        document.getElementById("metric-server-latency").innerText = "-- ms";
+        document.getElementById("metric-round-trip").innerText = "-- ms";
         document.getElementById("metric-prob").innerText = "--";
         const postureBadge = document.getElementById("badge-posture");
         postureBadge.className =
@@ -2374,14 +2396,28 @@
       loadModelInfo();
 
       function initWebSocket() {
+        if (isPageUnloading) return;
+        if (
+          ws &&
+          (ws.readyState === WebSocket.OPEN ||
+            ws.readyState === WebSocket.CONNECTING)
+        )
+          return;
+        if (reconnectTimer) {
+          clearTimeout(reconnectTimer);
+          reconnectTimer = null;
+        }
+
         const loc = window.location;
         const wsUri =
           (loc.protocol === "https:" ? "wss://" : "ws://") +
           loc.host +
           "/ws/stream";
-        ws = new WebSocket(wsUri);
+        const socket = new WebSocket(wsUri);
+        ws = socket;
 
-        ws.onopen = () => {
+        socket.onopen = () => {
+          if (ws !== socket) return;
           connStatus.innerHTML =
             '<span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span><span>Hệ thống sẵn sàng</span>';
           connStatus.className =
@@ -2389,24 +2425,43 @@
           sendFrame();
         };
 
-        ws.onclose = () => {
+        socket.onclose = () => {
+          if (ws !== socket) return;
+          ws = null;
           connStatus.innerHTML =
             '<span class="w-1.5 h-1.5 rounded-full bg-slate-500"></span><span>Mất kết nối</span>';
           connStatus.className =
             "inline-flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-bold rounded-full bg-slate-100 text-slate-700 border border-slate-300";
           frameInFlight = false;
-          setTimeout(initWebSocket, 2000);
+          if (!isPageUnloading && !reconnectTimer) {
+            reconnectTimer = setTimeout(() => {
+              reconnectTimer = null;
+              initWebSocket();
+            }, 2000);
+          }
         };
 
-        ws.onmessage = (event) => {
-          const data = JSON.parse(event.data);
+        socket.onmessage = (event) => {
+          if (ws !== socket) return;
+          let data;
+          try {
+            data = JSON.parse(event.data);
+          } catch (error) {
+            console.error("Invalid WebSocket response", error);
+            frameInFlight = false;
+            sendFrame();
+            return;
+          }
           const isFrameResult = data.client_time !== undefined;
           if (isFrameResult) {
             frameInFlight = false;
-            const ping = Math.round(performance.now() - data.client_time);
-            if (ping >= 0) {
-              document.getElementById("metric-ping").innerText = `${ping} ms`;
-            }
+            latestRoundTripMs = Math.max(
+              0,
+              Math.round(performance.now() - data.client_time),
+            );
+            latestServerProcessingMs = Number.isFinite(data.server_processing_ms)
+              ? Math.round(data.server_processing_ms)
+              : null;
 
             if (data.status !== "ERROR") fpsResultCount++;
             const now = performance.now();
@@ -2415,6 +2470,12 @@
               const actualFps = (fpsResultCount * 1000) / elapsed;
               document.getElementById("metric-fps").innerText =
                 actualFps.toFixed(1);
+              document.getElementById("metric-server-latency").innerText =
+                latestServerProcessingMs === null
+                  ? "-- ms"
+                  : `${latestServerProcessingMs} ms`;
+              document.getElementById("metric-round-trip").innerText =
+                latestRoundTripMs === null ? "-- ms" : `${latestRoundTripMs} ms`;
               fpsWindowStart = now;
               fpsResultCount = 0;
             }
@@ -2424,6 +2485,7 @@
             }
           }
           if (isStreaming) updateUI(data);
+          // Chỉ lấy frame mới nhất sau khi backend trả kết quả; không tạo queue.
           if (isFrameResult) sendFrame();
         };
       }
@@ -2444,6 +2506,7 @@
             startBreakTimer();
           }
           isStreaming = false;
+          stopRenderLoop();
           btnCamText.innerText = "Bật Webcam";
           camPlaceholder.classList.remove("hidden");
           alertBanner.classList.add("hidden");
@@ -2460,6 +2523,7 @@
           video.srcObject = stream;
           video.play();
           isStreaming = true;
+          startRenderLoop();
           sessionStartTime = new Date();
           btnCamText.innerText = "Tắt Webcam";
           camPlaceholder.classList.add("hidden");
@@ -2521,16 +2585,35 @@
       }
 
       function renderVideoFrame() {
+        renderFrameRequestId = null;
+        const renderNow = performance.now();
         if (
           isStreaming &&
+          renderNow - lastVideoRenderAt >= 1000 / 30 &&
           video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA &&
           canvas.width > 0 &&
           canvas.height > 0
         ) {
+          lastVideoRenderAt = renderNow;
           ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
           if (latestPoseResult) drawSkeleton(latestPoseResult);
         }
-        requestAnimationFrame(renderVideoFrame);
+        if (isStreaming) {
+          renderFrameRequestId = requestAnimationFrame(renderVideoFrame);
+        }
+      }
+
+      function startRenderLoop() {
+        if (isStreaming && renderFrameRequestId === null) {
+          renderFrameRequestId = requestAnimationFrame(renderVideoFrame);
+        }
+      }
+
+      function stopRenderLoop() {
+        if (renderFrameRequestId !== null) {
+          cancelAnimationFrame(renderFrameRequestId);
+          renderFrameRequestId = null;
+        }
       }
       // if (res.bbox) {
       //   const [x1, y1, x2, y2] = res.bbox;
@@ -2691,6 +2774,10 @@
         }
 
         // 1. Điểm công thái học
+        const statsRenderNow = performance.now();
+        const shouldRenderStats = statsRenderNow - lastStatsRenderAt >= 1000;
+        if (shouldRenderStats) {
+          lastStatsRenderAt = statsRenderNow;
         const scoreVal = stats.ergonomics_score;
         const scoreEl = document.getElementById("stat-score");
         const ratingBadge = document.getElementById("badge-score-rating");
@@ -2773,6 +2860,8 @@
         }
 
         // 4. Badge tư thế & Gợi ý (Đã thêm xử lý Invalid Detection)
+        }
+
         const badgePosture = document.getElementById("badge-posture");
         const invalidBanner = document.getElementById("invalid-banner");
 
@@ -2941,7 +3030,21 @@
       btnModalCsv.addEventListener("click", exportReportCSV);
 
       initWebSocket();
-      requestAnimationFrame(renderVideoFrame);
+      window.addEventListener("beforeunload", () => {
+        isPageUnloading = true;
+        if (reconnectTimer) {
+          clearTimeout(reconnectTimer);
+          reconnectTimer = null;
+        }
+        stopRenderLoop();
+        if (sessionClockInterval) clearInterval(sessionClockInterval);
+        if (breakClockInterval) clearInterval(breakClockInterval);
+        if (stream) stream.getTracks().forEach((track) => track.stop());
+        if (ws) {
+          ws.onclose = null;
+          ws.close();
+        }
+      });
       renderHistoryUI(); // Khởi tạo danh sách lịch sử khi tải trang
 
       // Phím tắt Calibration & Điều khiển hệ thống
