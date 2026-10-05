@@ -19,6 +19,7 @@ import numpy as np
 from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 # ------------------------------------------------------------
@@ -37,6 +38,7 @@ YOLO_MODEL_PATH = PROJECT_ROOT / "models" / "yolo26n-pose.pt"
 APP_DIR = Path(__file__).resolve().parent
 TEMPLATES_DIR = APP_DIR / "templates"
 INDEX_HTML_PATH = TEMPLATES_DIR / "index.html"
+STATIC_DIR = APP_DIR / "static"
 
 # ------------------------------------------------------------
 # 2. Engine Singleton & Lifespan Handler
@@ -79,6 +81,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Frontend dependencies are vendored here so localhost keeps working offline.
+app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 
 class AlertThresholdPayload(BaseModel):
